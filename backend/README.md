@@ -72,44 +72,58 @@ npm run start:prod
 
 The server will start on `http://localhost:3000` by default.
 
+## API Documentation
+
+Interactive API documentation is available via Swagger UI at:
+
+**http://localhost:3000/api**
+
+The Swagger interface provides:
+- Complete API reference with all endpoints
+- Request/response schemas
+- Interactive "Try it out" functionality to test endpoints directly
+- Example request bodies and responses
+- Detailed parameter descriptions
+
 ## API Endpoints
 
-The service uses a job-based asynchronous architecture. Analysis jobs are created immediately and processed in the background.
+The service uses a job-based asynchronous architecture with three types of jobs:
 
-### POST /coverage/analyze
+1. **coverage-analyzer**: Clones repository and analyzes test coverage
+2. **tests-generator**: Generates unit tests for specific files  
+3. **pr-creator**: Creates GitHub pull requests with generated tests
 
-Creates a new analysis job for a GitHub repository. Returns immediately with a job ID.
+All job endpoints follow the pattern: `/jobs/{job-type}/start` to create jobs and `/jobs/{job-type}/:jobId/result` to get results.
+
+### Coverage Analyzer Jobs
+
+#### POST /jobs/coverage-analyzer/start
+
+Starts a coverage analyzer job for a GitHub repository.
 
 **Request Body:**
 ```json
 {
-  "repositoryUrl": "https://github.com/username/repository.git"
+  "repositoryUrl": "https://github.com/username/repository.git",
+  "entrypoint": "packages/api"  // Optional: subdirectory for monorepos
 }
 ```
 
-**Response (HTTP 202 Accepted):**
+**Response (HTTP 202):**
 ```json
 {
   "jobId": "550e8400-e29b-41d4-a716-446655440000",
   "repositoryUrl": "https://github.com/username/repository.git",
   "status": "PENDING",
-  "message": "Job created and processing started"
+  "message": "Coverage analyzer job created and started"
 }
 ```
 
-### GET /coverage/jobs/:jobId/result
+#### GET /jobs/coverage-analyzer/:jobId/result
 
-Gets the coverage analysis job status and results, including real-time output from Claude CLI.
+Gets coverage analyzer job status and results. Poll this endpoint to monitor progress.
 
-**Job Statuses:**
-- `PENDING`: Job created, waiting to start
-- `CLONING`: Repository is being cloned
-- `INSTALLING`: Installing npm dependencies
-- `ANALYZING`: Claude is analyzing the repository
-- `COMPLETED`: Analysis finished successfully
-- `FAILED`: Analysis failed (check error field)
-
-**Response (when processing or completed):**
+**Response:**
 ```json
 {
   "jobId": "550e8400-e29b-41d4-a716-446655440000",
@@ -118,127 +132,171 @@ Gets the coverage analysis job status and results, including real-time output fr
   "totalFiles": 15,
   "averageCoverage": 67.5,
   "files": [
-    {
-      "file": "src/index.ts",
-      "coverage": 85.5
-    },
-    {
-      "file": "src/utils.ts",
-      "coverage": 42.0
-    }
+    {"file": "src/index.ts", "coverage": 85.5},
+    {"file": "src/utils.ts", "coverage": 42.0}
   ],
   "error": null,
   "output": [
     "Cloning repository...",
-    "Repository cloned to /tmp/repo-xyz123",
+    "Repository cloned",
     "Starting Claude analysis...",
-    "Analysis completed, processing results...",
-    "Job completed. Repository kept for test generation. Use cleanup endpoint when done."
+    "Analysis completed"
   ]
 }
 ```
 
-**Note:** The response includes the current status and real-time output. Poll this endpoint to monitor job progress. When `status` is `FAILED`, check the `error` field for details.
+**Job Statuses:**
+- `PENDING`: Job created
+- `CLONING`: Cloning repository
+- `INSTALLING`: Installing dependencies
+- `ANALYZING`: Analyzing coverage
+- `COMPLETED`: Analysis complete
+- `FAILED`: Analysis failed
+
+### Test Generator Jobs
+
+#### POST /jobs/tests-generator/start
+
+Starts a test generator job for a specific file.
+
+**Request Body:**
+```json
+{
+  "coverageAnalyzerJobId": "550e8400-e29b-41d4-a716-446655440000",
+  "filePath": "src/utils/helpers.ts"
+}
+```
+
+**Response (HTTP 202):**
+```json
+{
+  "jobId": "550e8400-e29b-41d4-a716-446655440001",
+  "repositoryUrl": "https://github.com/username/repository.git",
+  "status": "PENDING",
+  "message": "Test generator job created for src/utils/helpers.ts"
+}
+```
+
+#### GET /jobs/tests-generator/:jobId/result
+
+Gets test generator job status and results.
+
+**Response:**
+```json
+{
+  "jobId": "550e8400-e29b-41d4-a716-446655440001",
+  "repositoryUrl": "https://github.com/username/repository.git",
+  "status": "TEST_GENERATION_COMPLETED",
+  "parentJobId": "550e8400-e29b-41d4-a716-446655440000",
+  "targetFilePath": "src/utils/helpers.ts",
+  "testGenerationResult": {
+    "filePath": "src/utils/helpers.ts",
+    "summary": "Created test file with 15 tests. Coverage improved from 42% to 87%.",
+    "testFilePath": "src/utils/helpers.spec.ts",
+    "coverage": 87
+  },
+  "error": null,
+  "output": [
+    "Starting test generation...",
+    "Session ID: xyz-789",
+    "Test generation completed"
+  ]
+}
+```
+
+**Job Statuses:**
+- `PENDING`: Job created
+- `GENERATING_TESTS`: Generating tests
+- `TEST_GENERATION_COMPLETED`: Tests generated
+- `TEST_GENERATION_FAILED`: Generation failed
+
+### PR Creator Jobs
+
+#### POST /jobs/pr-creator/start
+
+Starts a PR creator job to create a GitHub pull request.
+
+**Request Body:**
+```json
+{
+  "testGeneratorJobId": "550e8400-e29b-41d4-a716-446655440001"
+}
+```
+
+**Response (HTTP 202):**
+```json
+{
+  "jobId": "550e8400-e29b-41d4-a716-446655440002",
+  "repositoryUrl": "https://github.com/username/repository.git",
+  "status": "PENDING",
+  "message": "PR creator job created and started"
+}
+```
+
+#### GET /jobs/pr-creator/:jobId/result
+
+Gets PR creator job status and results.
+
+**Response:**
+```json
+{
+  "jobId": "550e8400-e29b-41d4-a716-446655440002",
+  "repositoryUrl": "https://github.com/username/repository.git",
+  "status": "PR_CREATED",
+  "parentJobId": "550e8400-e29b-41d4-a716-446655440001",
+  "prCreationResult": {
+    "prUrl": "https://github.com/username/repository/pull/42",
+    "prNumber": 42,
+    "summary": "Created pull request with comprehensive unit tests..."
+  },
+  "error": null,
+  "output": [
+    "Creating pull request...",
+    "Using session ID: xyz-789",
+    "PR created: https://github.com/username/repository/pull/42"
+  ]
+}
+```
+
+**Job Statuses:**
+- `PENDING`: Job created
+- `CREATING_PR`: Creating PR
+- `PR_CREATED`: PR created successfully
+- `PR_CREATION_FAILED`: PR creation failed
 
 ## How It Works
 
 The service uses an asynchronous job-based architecture:
 
-1. **Job Creation**: When you POST to `/coverage/analyze`, a job is created immediately and a job ID is returned. The job starts processing in the background.
+1. **Job Creation**: POST to `/jobs/{type}/start` creates a job and returns immediately with a job ID. The job starts processing in the background.
 
-2. **Repository Cloning** (Status: CLONING): The service clones the specified GitHub repository into a temporary directory using Git.
+2. **Repository Cloning** (Coverage Analyzer): The service clones the specified GitHub repository into a temporary directory.
 
-3. **Dependency Installation** (Status: INSTALLING): The service runs `npm install` in the cloned repository to install all dependencies needed for running tests.
+3. **Dependency Installation**: Runs `npm install` in the repository (or entrypoint subdirectory).
 
-4. **Claude Analysis** (Status: ANALYZING): The Claude CLI is executed in the cloned repository directory with a prompt that instructs it to:
-   - Check for existing test pipelines (npm test, jest, etc.)
-   - If tests exist, run them with coverage enabled
-   - If no test pipeline exists, set up Jest and run tests
-   - If no tests exist, return 0% coverage for all source files
-   - Output results in JSON format
+4. **Claude Analysis**: Executes Claude CLI to analyze test coverage or generate tests.
 
-5. **Coverage Parsing**: The service parses Claude's JSON output to extract coverage data per file.
+5. **Job Completion**: Results are stored and can be retrieved via `/jobs/{type}/:jobId/result`.
 
-6. **Job Completion** (Status: COMPLETED): Results are stored in the job and can be retrieved via the `/jobs/:jobId/result` endpoint.
-
-7. **Cleanup**: The temporary directory is automatically cleaned up after analysis (success or failure).
+6. **Cleanup**: Use the cleanup endpoint when done with all jobs (to be implemented).
 
 ## Example Usage
 
-### Step 1: Create a job
+### Basic Coverage Analysis
 
 ```bash
-curl -X POST http://localhost:3000/coverage/analyze \
+# Start coverage analyzer
+curl -X POST http://localhost:3000/jobs/coverage-analyzer/start \
   -H "Content-Type: application/json" \
   -d '{"repositoryUrl": "https://github.com/username/repository.git"}'
+
+# Response: {"jobId": "job-1", ...}
+
+# Check result
+curl http://localhost:3000/jobs/coverage-analyzer/job-1/result
 ```
 
-Response:
-```json
-{
-  "jobId": "550e8400-e29b-41d4-a716-446655440000",
-  "repositoryUrl": "https://github.com/username/repository.git",
-  "status": "PENDING",
-  "message": "Job created and processing started"
-}
-```
 
-### Step 2: Monitor job progress and get results
-
-Poll the result endpoint to check the job status and see real-time output:
-
-```bash
-curl http://localhost:3000/coverage/jobs/550e8400-e29b-41d4-a716-446655440000/result
-```
-
-Response (while processing):
-```json
-{
-  "jobId": "550e8400-e29b-41d4-a716-446655440000",
-  "repositoryUrl": "https://github.com/username/repository.git",
-  "status": "ANALYZING",
-  "totalFiles": null,
-  "averageCoverage": null,
-  "files": null,
-  "error": null,
-  "output": [
-    "Cloning repository https://github.com/username/repository.git...",
-    "Repository cloned to /tmp/repo-xyz123",
-    "Starting Claude analysis...",
-    "Checking for test configuration...",
-    "Running npm test -- --coverage..."
-  ]
-}
-```
-
-Response (when completed):
-```json
-{
-  "jobId": "550e8400-e29b-41d4-a716-446655440000",
-  "repositoryUrl": "https://github.com/username/repository.git",
-  "status": "COMPLETED",
-  "totalFiles": 15,
-  "averageCoverage": 67.5,
-  "files": [
-    {
-      "file": "src/index.ts",
-      "coverage": 85.5
-    },
-    {
-      "file": "src/utils.ts",
-      "coverage": 42.0
-    }
-  ],
-  "error": null,
-  "output": [
-    "Cloning repository...",
-    "Repository cloned to /tmp/repo-xyz123",
-    "Starting Claude analysis...",
-    "Analysis completed, processing results...",
-    "Job completed. Repository kept for test generation. Use cleanup endpoint when done."
-  ]
-}
-```
 
 ## Complete Workflow: From Analysis to PR
 
@@ -247,7 +305,7 @@ This service supports a complete workflow from analyzing coverage to automatical
 ### Step 1: Analyze Repository Coverage
 
 ```bash
-curl -X POST http://localhost:3000/coverage/analyze \
+curl -X POST http://localhost:3000/jobs/coverage-analyzer/start \
   -H "Content-Type: application/json" \
   -d '{"repositoryUrl": "https://github.com/username/repository.git"}'
 ```
@@ -266,7 +324,7 @@ Response:
 Poll the result endpoint until `status` is `COMPLETED`:
 
 ```bash
-curl http://localhost:3000/coverage/jobs/analysis-abc-123/result
+curl http://localhost:3000/jobs/coverage-analyzer/analysis-abc-123/result
 ```
 
 From the response, identify files with low coverage (e.g., `src/utils/helpers.ts` with 42% coverage).
@@ -274,9 +332,12 @@ From the response, identify files with low coverage (e.g., `src/utils/helpers.ts
 ### Step 3: Generate Tests for Low Coverage File
 
 ```bash
-curl -X POST http://localhost:3000/coverage/jobs/analysis-abc-123/generate-tests \
+curl -X POST http://localhost:3000/jobs/tests-generator/start \
   -H "Content-Type: application/json" \
-  -d '{"filePath": "src/utils/helpers.ts"}'
+  -d '{
+    "coverageAnalyzerJobId": "analysis-abc-123",
+    "filePath": "src/utils/helpers.ts"
+  }'
 ```
 
 Response:
@@ -293,7 +354,7 @@ Response:
 Poll the result endpoint to watch progress:
 
 ```bash
-curl http://localhost:3000/coverage/test-jobs/test-def-456/result
+curl http://localhost:3000/jobs/tests-generator/test-def-456/result
 ```
 
 Watch the `status` field change from `GENERATING_TESTS` to `TEST_GENERATION_COMPLETED`, and the `output` field for real-time progress including "Session ID saved: xyz-789".
@@ -326,7 +387,9 @@ Response (when completed):
 ### Step 5: Create Pull Request with Changes
 
 ```bash
-curl -X POST http://localhost:3000/coverage/test-jobs/test-def-456/create-pr
+curl -X POST http://localhost:3000/jobs/pr-creator/start \
+  -H "Content-Type: application/json" \
+  -d '{"testGeneratorJobId": "test-def-456"}'
 ```
 
 Response:
@@ -343,7 +406,7 @@ Response:
 Poll the result endpoint to watch PR creation progress:
 
 ```bash
-curl http://localhost:3000/coverage/pr-jobs/pr-ghi-789/result
+curl http://localhost:3000/jobs/pr-creator/pr-ghi-789/result
 ```
 
 Watch the `status` change from `CREATING_PR` to `PR_CREATED`, and monitor the `output` for real-time progress.
@@ -371,14 +434,6 @@ Response (when completed):
 }
 ```
 
-### Step 7: Cleanup (When Done)
-
-```bash
-curl -X DELETE http://localhost:3000/coverage/jobs/analysis-abc-123
-```
-
-**Note:** The cleanup will delete the cloned repository and all associated jobs (analysis, test generation, and PR creation).
-
 ## Advanced Features
 
 ### Monorepo Support with Entrypoint
@@ -386,7 +441,7 @@ curl -X DELETE http://localhost:3000/coverage/jobs/analysis-abc-123
 For repositories where the source code is in a subdirectory:
 
 ```bash
-curl -X POST http://localhost:3000/coverage/analyze \
+curl -X POST http://localhost:3000/jobs/coverage-analyzer/start \
   -H "Content-Type: application/json" \
   -d '{
     "repositoryUrl": "https://github.com/org/monorepo.git",
