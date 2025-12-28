@@ -15,6 +15,7 @@ import {
 import {
   GetJobHandler,
   GetAllJobsHandler,
+  GetChildJobsHandler,
 } from './application/queries';
 
 const CommandHandlers = [
@@ -24,7 +25,7 @@ const CommandHandlers = [
   SetJobErrorHandler,
 ];
 
-const QueryHandlers = [GetJobHandler, GetAllJobsHandler];
+const QueryHandlers = [GetJobHandler, GetAllJobsHandler, GetChildJobsHandler];
 
 @Module({
   imports: [CqrsModule],

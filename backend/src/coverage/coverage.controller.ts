@@ -38,7 +38,7 @@ export class CoverageController {
   @ApiOperation({
     summary: 'Create and start a job',
     description:
-      'Creates a job that can perform coverage analysis, test generation, and PR creation. The system automatically determines and executes the necessary stages based on what is provided. You can optionally provide an existing jobId with a targetFilePath to continue from an already completed coverage analysis job, skipping the cloning, installation, and analysis stages.',
+      'Creates a job that can perform coverage analysis, test generation, and PR creation. The system automatically determines and executes the necessary stages based on what is provided. You can optionally provide a parentJobId with a targetFilePath to create a child job that reuses the parent\'s coverage analysis results, skipping the cloning, installation, and analysis stages.',
   })
   @ApiResponse({
     status: HttpStatus.ACCEPTED,
@@ -55,12 +55,18 @@ export class CoverageController {
     let job: Job;
 
     if (dto.jobId) {
-      // Reuse existing job and add targetFilePath
-      job = await this.queryBus.execute(new GetJobQuery(dto.jobId));
+      // Fetch parent job to get repository details and create a child job
+      const parentJob = await this.queryBus.execute(new GetJobQuery(dto.jobId));
 
-      if (dto.targetFilePath) {
-        job.setTargetFilePath(dto.targetFilePath);
-      }
+      // Create a new child job that references the parent
+      job = await this.commandBus.execute(
+        new CreateJobCommand(
+          parentJob.repositoryUrl,
+          parentJob.entrypoint,
+          dto.targetFilePath,
+          dto.jobId, // parentJobId
+        ),
+      );
     } else {
       // Create new job - repositoryUrl is required when jobId is not provided
       if (!dto.repositoryUrl) {
@@ -81,7 +87,7 @@ export class CoverageController {
       repositoryUrl: job.repositoryUrl,
       status: job.status,
       message: dto.jobId
-        ? `Continuing job ${dto.jobId} with test generation`
+        ? `Created child job ${job.id.getValue()} for test generation (reusing analysis from ${dto.jobId})`
         : `Job created${dto.targetFilePath ? ' for test generation and PR creation' : ' for coverage analysis'}`,
     };
   }
@@ -112,6 +118,7 @@ export class CoverageController {
 
     return {
       jobId: job.id.getValue(),
+      parentJobId: job.parentJobId,
       repositoryUrl: job.repositoryUrl,
       status: job.status,
       totalFiles: job.coverageResult?.totalFiles,

@@ -15,14 +15,23 @@ export class CreateJobHandler implements ICommandHandler<CreateJobCommand> {
   ) {}
 
   async execute(command: CreateJobCommand): Promise<Job> {
-    const { repositoryUrl, entrypoint, targetFilePath } = command;
+    const { repositoryUrl, entrypoint, targetFilePath, parentJobId } = command;
 
-    const job = Job.create(repositoryUrl, entrypoint, targetFilePath);
+    const job = Job.create(repositoryUrl, entrypoint, targetFilePath, parentJobId);
+
+    // If this is a child job, inherit parent's analysis results
+    if (parentJobId) {
+      const parentJob = await this.jobRepository.findById(parentJobId);
+      if (!parentJob) {
+        throw new Error(`Parent job ${parentJobId} not found`);
+      }
+      job.inheritFromParent(parentJob);
+    }
 
     await this.jobRepository.save(job);
 
     this.logger.log(
-      `Job created: ${job.id.getValue()} for repository ${repositoryUrl}${entrypoint ? ` with entrypoint ${entrypoint}` : ''}${targetFilePath ? ` targeting file ${targetFilePath}` : ''}`,
+      `Job created: ${job.id.getValue()} for repository ${repositoryUrl}${parentJobId ? ` (child of ${parentJobId})` : ''}${entrypoint ? ` with entrypoint ${entrypoint}` : ''}${targetFilePath ? ` targeting file ${targetFilePath}` : ''}`,
     );
 
     return job;

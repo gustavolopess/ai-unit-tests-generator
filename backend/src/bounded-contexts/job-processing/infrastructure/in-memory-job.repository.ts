@@ -13,12 +13,13 @@ export class InMemoryJobRepository implements IJobRepository {
     this.logger.log(`Job saved: ${job.id.getValue()}`);
   }
 
-  async findById(id: JobId): Promise<Job | null> {
-    const job = this.jobs.get(id.getValue()) || null;
+  async findById(id: JobId | string): Promise<Job | null> {
+    const idValue = typeof id === 'string' ? id : id.getValue();
+    const job = this.jobs.get(idValue) || null;
     if (job) {
-      this.logger.log(`Job found: ${id.getValue()}`);
+      this.logger.log(`Job found: ${idValue}`);
     } else {
-      this.logger.warn(`Job not found: ${id.getValue()}`);
+      this.logger.warn(`Job not found: ${idValue}`);
     }
     return job;
   }
@@ -27,6 +28,14 @@ export class InMemoryJobRepository implements IJobRepository {
     const jobs = Array.from(this.jobs.values());
     this.logger.log(`Retrieved ${jobs.length} jobs`);
     return jobs;
+  }
+
+  async findByParentJobId(parentJobId: string): Promise<Job[]> {
+    const childJobs = Array.from(this.jobs.values()).filter(
+      (job) => job.parentJobId === parentJobId,
+    );
+    this.logger.log(`Found ${childJobs.length} child jobs for parent ${parentJobId}`);
+    return childJobs;
   }
 
   async delete(id: JobId): Promise<void> {

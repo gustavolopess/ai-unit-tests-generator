@@ -10,6 +10,7 @@ export interface JobProps {
   repositoryUrl: string;
   entrypoint?: string;
   targetFilePath?: string; // File to generate tests for (optional)
+  parentJobId?: string; // Reference to parent job for reusing analysis results
   status: JobStatus;
   createdAt: Date;
   updatedAt: Date;
@@ -48,12 +49,14 @@ export class Job extends AggregateRoot<JobId> {
     repositoryUrl: string,
     entrypoint?: string,
     targetFilePath?: string,
+    parentJobId?: string,
   ): Job {
     const jobId = JobId.generate();
     const job = new Job(jobId, {
       repositoryUrl,
       entrypoint,
       targetFilePath,
+      parentJobId,
       status: JobStatus.PENDING,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -79,6 +82,10 @@ export class Job extends AggregateRoot<JobId> {
 
   get targetFilePath(): string | undefined {
     return this.props.targetFilePath;
+  }
+
+  get parentJobId(): string | undefined {
+    return this.props.parentJobId;
   }
 
   get status(): JobStatus {
@@ -206,6 +213,17 @@ export class Job extends AggregateRoot<JobId> {
     this.props.updatedAt = new Date();
   }
 
+  inheritFromParent(parentJob: Job): void {
+    if (!this.isChildJob()) {
+      throw new Error('Cannot inherit from parent: this is not a child job');
+    }
+
+    // Inherit repository path and coverage results from parent
+    this.props.repositoryPath = parentJob.repositoryPath;
+    this.props.coverageResult = parentJob.coverageResult;
+    this.props.updatedAt = new Date();
+  }
+
   // Helper methods
   private isTerminalStatus(status: JobStatus): boolean {
     return [
@@ -227,6 +245,10 @@ export class Job extends AggregateRoot<JobId> {
   }
 
   // Validation methods for stage prerequisites
+  isChildJob(): boolean {
+    return this.props.parentJobId !== undefined;
+  }
+
   needsCloning(): boolean {
     return !this.props.repositoryPath;
   }
