@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { JobStatus } from '../../job/job.entity';
+import { JobStatus } from '../../bounded-contexts/job-processing/domain/models/job-status.enum';
 import { FileCoverageDto } from './coverage-response.dto';
 
 export class JobCreatedResponseDto {
@@ -27,39 +27,6 @@ export class JobCreatedResponseDto {
     example: 'Job created and processing started',
   })
   message: string;
-}
-
-export class JobStatusResponseDto {
-  @ApiProperty({ description: 'Unique job identifier' })
-  jobId: string;
-
-  @ApiProperty({ description: 'GitHub repository URL' })
-  repositoryUrl: string;
-
-  @ApiProperty({ description: 'Current job status', enum: JobStatus })
-  status: JobStatus;
-
-  @ApiProperty({ description: 'Job creation timestamp' })
-  createdAt: Date;
-
-  @ApiProperty({ description: 'Last update timestamp' })
-  updatedAt: Date;
-
-  @ApiProperty({ description: 'Job start timestamp', required: false })
-  startedAt?: Date;
-
-  @ApiProperty({ description: 'Job completion timestamp', required: false })
-  completedAt?: Date;
-
-  @ApiProperty({ description: 'Error message if job failed', required: false })
-  error?: string;
-
-  @ApiProperty({
-    description: 'Real-time output log from job execution',
-    type: [String],
-    example: ['Cloning repository...', 'Repository cloned to /tmp/repo-xyz123'],
-  })
-  output: string[];
 }
 
 export class JobResultResponseDto {
@@ -102,6 +69,25 @@ export class JobResultResponseDto {
     required: false,
   })
   files?: FileCoverageDto[];
+
+  @ApiProperty({
+    description: 'Test generation result',
+    required: false,
+  })
+  testGenerationResult?: {
+    filePath: string;
+    testFilePath?: string;
+    coverage?: number;
+  };
+
+  @ApiProperty({
+    description: 'PR creation result',
+    required: false,
+  })
+  prCreationResult?: {
+    prUrl: string;
+    prNumber: number;
+  };
 
   @ApiProperty({
     description: 'Error message if job failed',

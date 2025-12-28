@@ -1,11 +1,23 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { GitService } from '../git/git.service';
 import { ClaudeService } from '../claude/claude.service';
-import { JobService } from '../job/job.service';
-import { JobStatus } from '../job/job.entity';
 import { FileCoverageDto } from './dto/coverage-response.dto';
+import {
+  UpdateJobStatusCommand,
+  AppendJobOutputCommand,
+  SetJobErrorCommand,
+} from '../bounded-contexts/job-processing/application/commands';
+import { GetJobQuery } from '../bounded-contexts/job-processing/application/queries';
+import { JobStatus } from '../bounded-contexts/job-processing/domain/models/job-status.enum';
+import { Job } from '../bounded-contexts/job-processing/domain/models/job.entity';
+import { RepositoryCacheService } from '../bounded-contexts/repository-analysis/infrastructure/repository-cache.service';
+import {
+  CloneRepositoryCommand,
+  AnalyzeCoverageCommand,
+} from '../bounded-contexts/repository-analysis/application/commands';
+import { Repository } from '../bounded-contexts/repository-analysis/domain/models/repository.entity';
 
 const execAsync = promisify(exec);
 
@@ -14,69 +26,311 @@ export class CoverageService {
   private readonly logger = new Logger(CoverageService.name);
 
   constructor(
-    private readonly gitService: GitService,
     private readonly claudeService: ClaudeService,
-    private readonly jobService: JobService,
+    private readonly commandBus: CommandBus,
+    private readonly queryBus: QueryBus,
+    private readonly repositoryCache: RepositoryCacheService,
   ) {}
 
-  async processJobAsync(jobId: string): Promise<void> {
-    const job = this.jobService.getJob(jobId);
-    let repoPath: string | null = null;
-
+  /**
+   * Main orchestration method that processes all job stages intelligently
+   */
+  async processJobStages(jobId: string): Promise<void> {
     try {
-      this.jobService.updateJobStatus(jobId, JobStatus.CLONING);
-      this.jobService.appendOutput(jobId, `Cloning repository ${job.repositoryUrl}...`);
+      const job: Job = await this.queryBus.execute(new GetJobQuery(jobId));
 
-      repoPath = await this.gitService.cloneRepository(job.repositoryUrl);
-      this.jobService.appendOutput(jobId, `Repository cloned to ${repoPath}`);
-      this.jobService.setRepositoryPath(jobId, repoPath);
+      // Stage 1: Clone repository (if needed)
+      if (job.needsCloning()) {
+        await this.cloneRepositoryStage(jobId);
+      }
 
-      // Determine working directory based on entrypoint
-      const workDir = job.entrypoint
-        ? `${repoPath}/${job.entrypoint}`
-        : repoPath;
+      // Stage 2: Install dependencies (if needed)
+      await this.installDependenciesStage(jobId);
 
-      if (job.entrypoint) {
-        this.jobService.appendOutput(
-          jobId,
-          `Using entrypoint directory: ${job.entrypoint}`,
+      // Stage 3: Analyze coverage (if needed)
+      if (job.needsCoverageAnalysis()) {
+        await this.analyzeCoverageStage(jobId);
+        await this.commandBus.execute(
+          new UpdateJobStatusCommand(jobId, JobStatus.ANALYSIS_COMPLETED),
         );
       }
 
-      this.jobService.updateJobStatus(jobId, JobStatus.INSTALLING);
-      this.jobService.appendOutput(jobId, 'Running npm install...');
-      await this.runNpmInstall(workDir);
-      this.jobService.appendOutput(jobId, 'npm install completed');
+      // Stage 4: Generate tests (if needed and requested)
+      if (job.needsTestGeneration()) {
+        await this.generateTestsStage(jobId);
+        await this.commandBus.execute(
+          new UpdateJobStatusCommand(jobId, JobStatus.TEST_GENERATION_COMPLETED),
+        );
+      }
 
-      this.jobService.updateJobStatus(jobId, JobStatus.ANALYZING);
-      this.jobService.appendOutput(jobId, 'Starting Claude analysis...');
+      // Stage 5: Create PR (if needed and possible)
+      if (job.needsPRCreation()) {
+        await this.createPRStage(jobId);
+        await this.commandBus.execute(
+          new UpdateJobStatusCommand(jobId, JobStatus.PR_CREATION_COMPLETED),
+        );
+      }
 
-      const fileCoverages = await this.claudeService.analyzeCoverage(
-        workDir,
-        (output: string) => {
-          this.jobService.appendOutput(jobId, output);
-        },
+      // Mark job as completed
+      await this.commandBus.execute(
+        new UpdateJobStatusCommand(jobId, JobStatus.COMPLETED),
+      );
+      await this.commandBus.execute(
+        new AppendJobOutputCommand(jobId, 'All stages completed successfully!'),
       );
 
-      this.jobService.appendOutput(jobId, 'Analysis completed, processing results...');
-      const result = this.buildResult(fileCoverages);
-      this.jobService.setJobResult(jobId, result);
-      this.jobService.updateJobStatus(jobId, JobStatus.COMPLETED);
-      this.jobService.appendOutput(jobId, 'Job completed. Repository kept for test generation. Use cleanup endpoint when done.');
-
-      this.logger.log(`Job ${jobId} completed successfully`);
+      this.logger.log(`Job ${jobId} completed all stages successfully`);
     } catch (error) {
       this.logger.error(`Job ${jobId} failed: ${error.message}`);
-      this.jobService.appendOutput(jobId, `ERROR: ${error.message}`);
-      this.jobService.setJobError(jobId, error.message);
-
-      // Cleanup on failure
-      if (repoPath) {
-        this.jobService.appendOutput(jobId, 'Cleaning up temporary files after failure...');
-        await this.gitService.cleanup(repoPath);
-        this.jobService.appendOutput(jobId, 'Cleanup completed');
-      }
+      await this.commandBus.execute(
+        new AppendJobOutputCommand(jobId, `ERROR: ${error.message}`),
+      );
+      await this.commandBus.execute(
+        new SetJobErrorCommand(jobId, error.message),
+      );
     }
+  }
+
+  private async cloneRepositoryStage(jobId: string): Promise<void> {
+    const job: Job = await this.queryBus.execute(new GetJobQuery(jobId));
+
+    // Check if repository is already cached
+    const cachedPath = this.repositoryCache.getCachedPath(job.repositoryUrl);
+
+    if (cachedPath) {
+      await this.commandBus.execute(
+        new AppendJobOutputCommand(
+          jobId,
+          `Using cached repository at ${cachedPath}`,
+        ),
+      );
+      job.setRepositoryPath(cachedPath);
+      return;
+    }
+
+    await this.commandBus.execute(
+      new UpdateJobStatusCommand(jobId, JobStatus.CLONING),
+    );
+    await this.commandBus.execute(
+      new AppendJobOutputCommand(
+        jobId,
+        `Cloning repository ${job.repositoryUrl}...`,
+      ),
+    );
+
+    // Use Repository Analysis Context to clone
+    const repository: Repository = await this.commandBus.execute(
+      new CloneRepositoryCommand(job.repositoryUrl, job.entrypoint),
+    );
+
+    const repoPath = repository.localPath!;
+
+    await this.commandBus.execute(
+      new AppendJobOutputCommand(jobId, `Repository cloned to ${repoPath}`),
+    );
+
+    // Cache the repository path
+    this.repositoryCache.setCachedPath(job.repositoryUrl, repoPath);
+
+    // Update job with repository path and repository ID
+    job.setRepositoryPath(repoPath);
+  }
+
+  private async installDependenciesStage(jobId: string): Promise<void> {
+    const job: Job = await this.queryBus.execute(new GetJobQuery(jobId));
+
+    if (!job.repositoryPath) {
+      throw new Error('Cannot install dependencies: repository not cloned');
+    }
+
+    // Determine working directory based on entrypoint
+    const workDir = job.entrypoint
+      ? `${job.repositoryPath}/${job.entrypoint}`
+      : job.repositoryPath;
+
+    if (job.entrypoint) {
+      await this.commandBus.execute(
+        new AppendJobOutputCommand(
+          jobId,
+          `Using entrypoint directory: ${job.entrypoint}`,
+        ),
+      );
+    }
+
+    await this.commandBus.execute(
+      new UpdateJobStatusCommand(jobId, JobStatus.INSTALLING),
+    );
+    await this.commandBus.execute(
+      new AppendJobOutputCommand(jobId, 'Running npm install...'),
+    );
+
+    await this.runNpmInstall(workDir);
+
+    await this.commandBus.execute(
+      new AppendJobOutputCommand(jobId, 'npm install completed'),
+    );
+  }
+
+  private async analyzeCoverageStage(jobId: string): Promise<void> {
+    const job: Job = await this.queryBus.execute(new GetJobQuery(jobId));
+
+    if (!job.repositoryPath) {
+      throw new Error('Cannot analyze coverage: repository not cloned');
+    }
+
+    await this.commandBus.execute(
+      new UpdateJobStatusCommand(jobId, JobStatus.ANALYZING),
+    );
+    await this.commandBus.execute(
+      new AppendJobOutputCommand(jobId, 'Starting Claude coverage analysis...'),
+    );
+
+    // Find the repository in Repository Analysis Context
+    // We'll use the cache to find the repository by URL
+    const repository: Repository = await this.commandBus.execute(
+      new CloneRepositoryCommand(job.repositoryUrl, job.entrypoint),
+    );
+
+    // Use Repository Analysis Context to analyze coverage
+    const analyzedRepository: Repository = await this.commandBus.execute(
+      new AnalyzeCoverageCommand(
+        repository.id.getValue(),
+        async (output: string) => {
+          await this.commandBus.execute(
+            new AppendJobOutputCommand(jobId, output),
+          );
+        },
+      ),
+    );
+
+    await this.commandBus.execute(
+      new AppendJobOutputCommand(
+        jobId,
+        'Coverage analysis completed, processing results...',
+      ),
+    );
+
+    // Convert Repository Analysis domain model to Job domain model format
+    const fileCoverages: FileCoverageDto[] = analyzedRepository.fileCoverages.map(
+      (fc) => ({
+        file: fc.filePath,
+        coverage: fc.coveragePercentage,
+      }),
+    );
+
+    const result = this.buildCoverageResult(fileCoverages);
+    job.setCoverageResult(result);
+
+    await this.commandBus.execute(
+      new AppendJobOutputCommand(
+        jobId,
+        `Coverage analysis complete: ${result.totalFiles} files, ${result.averageCoverage}% average coverage`,
+      ),
+    );
+  }
+
+  private async generateTestsStage(jobId: string): Promise<void> {
+    const job: Job = await this.queryBus.execute(new GetJobQuery(jobId));
+
+    if (!job.canGenerateTests()) {
+      throw new Error(
+        'Cannot generate tests: repository not cloned or target file not specified',
+      );
+    }
+
+    const workDir = job.entrypoint
+      ? `${job.repositoryPath}/${job.entrypoint}`
+      : job.repositoryPath!;
+
+    await this.commandBus.execute(
+      new UpdateJobStatusCommand(jobId, JobStatus.GENERATING_TESTS),
+    );
+    await this.commandBus.execute(
+      new AppendJobOutputCommand(
+        jobId,
+        `Starting test generation for ${job.targetFilePath}...`,
+      ),
+    );
+
+    const result = await this.claudeService.generateTests(
+      workDir,
+      job.targetFilePath!,
+      async (output: string) => {
+        await this.commandBus.execute(
+          new AppendJobOutputCommand(jobId, output),
+        );
+      },
+    );
+
+    // Store session ID if available
+    if (result.sessionId) {
+      job.setSessionId(result.sessionId);
+      await this.commandBus.execute(
+        new AppendJobOutputCommand(
+          jobId,
+          `Session ID saved: ${result.sessionId}`,
+        ),
+      );
+    }
+
+    await this.commandBus.execute(
+      new AppendJobOutputCommand(
+        jobId,
+        'Test generation completed successfully',
+      ),
+    );
+
+    job.setTestGenerationResult({
+      filePath: job.targetFilePath!,
+      testFilePath: result.testFilePath,
+      coverage: result.coverage,
+    });
+  }
+
+  private async createPRStage(jobId: string): Promise<void> {
+    const job: Job = await this.queryBus.execute(new GetJobQuery(jobId));
+
+    if (!job.canCreatePR()) {
+      throw new Error(
+        'Cannot create PR: tests not generated or session ID missing',
+      );
+    }
+
+    const workDir = job.entrypoint
+      ? `${job.repositoryPath}/${job.entrypoint}`
+      : job.repositoryPath!;
+
+    await this.commandBus.execute(
+      new UpdateJobStatusCommand(jobId, JobStatus.CREATING_PR),
+    );
+    await this.commandBus.execute(
+      new AppendJobOutputCommand(
+        jobId,
+        `Creating pull request using session ${job.sessionId}...`,
+      ),
+    );
+
+    const result = await this.claudeService.createPullRequest(
+      workDir,
+      job.sessionId!,
+      async (output: string) => {
+        await this.commandBus.execute(
+          new AppendJobOutputCommand(jobId, output),
+        );
+      },
+    );
+
+    await this.commandBus.execute(
+      new AppendJobOutputCommand(
+        jobId,
+        `Pull request created successfully: ${result.prUrl}`,
+      ),
+    );
+
+    job.setPRCreationResult({
+      prUrl: result.prUrl,
+      prNumber: result.prNumber,
+    });
   }
 
   private async runNpmInstall(repoPath: string): Promise<void> {
@@ -101,132 +355,7 @@ export class CoverageService {
     }
   }
 
-  async processTestGenerationJobAsync(testJobId: string): Promise<void> {
-    const testJob = this.jobService.getJob(testJobId);
-
-    try {
-      this.jobService.updateJobStatus(testJobId, JobStatus.GENERATING_TESTS);
-      this.jobService.appendOutput(
-        testJobId,
-        `Starting test generation for ${testJob.targetFilePath}...`,
-      );
-
-      // Determine working directory based on entrypoint
-      const workDir = testJob.entrypoint
-        ? `${testJob.repositoryPath}/${testJob.entrypoint}`
-        : testJob.repositoryPath!;
-
-      if (testJob.entrypoint) {
-        this.jobService.appendOutput(
-          testJobId,
-          `Using entrypoint directory: ${testJob.entrypoint}`,
-        );
-      }
-
-      const result = await this.claudeService.generateTests(
-        workDir,
-        testJob.targetFilePath!,
-        (output: string) => {
-          this.jobService.appendOutput(testJobId, output);
-        },
-      );
-
-      // Store session ID if available
-      if (result.sessionId) {
-        this.jobService.setSessionId(testJobId, result.sessionId);
-        this.jobService.appendOutput(
-          testJobId,
-          `Session ID saved: ${result.sessionId}`,
-        );
-      }
-
-      this.jobService.appendOutput(
-        testJobId,
-        'Test generation completed successfully',
-      );
-      this.jobService.setTestGenerationResult(testJobId, {
-        filePath: testJob.targetFilePath!,
-        summary: result.summary,
-        testFilePath: result.testFilePath,
-        coverage: result.coverage,
-      });
-      this.jobService.updateJobStatus(
-        testJobId,
-        JobStatus.TEST_GENERATION_COMPLETED,
-      );
-
-      this.logger.log(`Test generation job ${testJobId} completed successfully`);
-    } catch (error) {
-      this.logger.error(`Test generation job ${testJobId} failed: ${error.message}`);
-      this.jobService.appendOutput(testJobId, `ERROR: ${error.message}`);
-      this.jobService.setJobError(testJobId, error.message);
-      this.jobService.updateJobStatus(
-        testJobId,
-        JobStatus.TEST_GENERATION_FAILED,
-      );
-    }
-  }
-
-  async processPRCreationJobAsync(prJobId: string): Promise<void> {
-    const prJob = this.jobService.getJob(prJobId);
-
-    try {
-      this.jobService.updateJobStatus(prJobId, JobStatus.CREATING_PR);
-      this.jobService.appendOutput(
-        prJobId,
-        `Creating pull request using session ${prJob.sessionId}...`,
-      );
-
-      // Determine working directory based on entrypoint
-      const workDir = prJob.entrypoint
-        ? `${prJob.repositoryPath}/${prJob.entrypoint}`
-        : prJob.repositoryPath!;
-
-      if (prJob.entrypoint) {
-        this.jobService.appendOutput(
-          prJobId,
-          `Using entrypoint directory: ${prJob.entrypoint}`,
-        );
-      }
-
-      const result = await this.claudeService.createPullRequest(
-        workDir,
-        prJob.sessionId!,
-        (output: string) => {
-          this.jobService.appendOutput(prJobId, output);
-        },
-      );
-
-      this.jobService.appendOutput(
-        prJobId,
-        `Pull request created successfully: ${result.prUrl}`,
-      );
-      this.jobService.setPRCreationResult(prJobId, result);
-      this.jobService.updateJobStatus(prJobId, JobStatus.PR_CREATED);
-
-      this.logger.log(`PR creation job ${prJobId} completed successfully: ${result.prUrl}`);
-    } catch (error) {
-      this.logger.error(`PR creation job ${prJobId} failed: ${error.message}`);
-      this.jobService.appendOutput(prJobId, `ERROR: ${error.message}`);
-      this.jobService.setJobError(prJobId, error.message);
-      this.jobService.updateJobStatus(prJobId, JobStatus.PR_CREATION_FAILED);
-    }
-  }
-
-  async cleanupJob(jobId: string): Promise<void> {
-    const job = this.jobService.getJob(jobId);
-
-    if (job.repositoryPath) {
-      this.logger.log(`Cleaning up repository for job ${jobId}`);
-      await this.gitService.cleanup(job.repositoryPath);
-      this.jobService.appendOutput(jobId, 'Repository cleaned up');
-    }
-
-    this.jobService.deleteJob(jobId);
-    this.logger.log(`Job ${jobId} deleted`);
-  }
-
-  private buildResult(files: FileCoverageDto[]): {
+  private buildCoverageResult(files: FileCoverageDto[]): {
     totalFiles: number;
     averageCoverage: number;
     files: FileCoverageDto[];
@@ -242,5 +371,20 @@ export class CoverageService {
       averageCoverage: Math.round(averageCoverage * 100) / 100,
       files,
     };
+  }
+
+  async cleanupJob(jobId: string): Promise<void> {
+    const job: Job = await this.queryBus.execute(new GetJobQuery(jobId));
+
+    if (job.repositoryPath) {
+      this.logger.log(`Cleaning up repository for job ${jobId}`);
+      // Cleanup is now handled by the Repository Analysis Context
+      // The GitService.cleanup() is currently disabled to allow repository reuse
+      await this.commandBus.execute(
+        new AppendJobOutputCommand(jobId, 'Repository cleanup skipped (cached for reuse)'),
+      );
+    }
+
+    this.logger.log(`Job ${jobId} cleanup completed`);
   }
 }
