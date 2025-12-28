@@ -19,6 +19,7 @@ export interface JobProps {
   error?: string;
   repositoryPath?: string;
   sessionId?: string;
+  testGenerationRequestId?: string;
   coverageResult?: {
     totalFiles: number;
     averageCoverage: number;
@@ -116,6 +117,10 @@ export class Job extends AggregateRoot<JobId> {
     return this.props.sessionId;
   }
 
+  get testGenerationRequestId(): string | undefined {
+    return this.props.testGenerationRequestId;
+  }
+
   get coverageResult(): JobProps['coverageResult'] | undefined {
     return this.props.coverageResult;
   }
@@ -193,6 +198,11 @@ export class Job extends AggregateRoot<JobId> {
 
   setTargetFilePath(filePath: string): void {
     this.props.targetFilePath = filePath;
+    this.props.updatedAt = new Date();
+  }
+
+  setTestGenerationRequestId(requestId: string): void {
+    this.props.testGenerationRequestId = requestId;
     this.props.updatedAt = new Date();
   }
 

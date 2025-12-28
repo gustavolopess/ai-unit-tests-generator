@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { ClaudeService } from '../claude/claude.service';
 import { FileCoverageDto } from './dto/coverage-response.dto';
 import {
   UpdateJobStatusCommand,
@@ -18,6 +17,11 @@ import {
   AnalyzeCoverageCommand,
 } from '../bounded-contexts/repository-analysis/application/commands';
 import { Repository } from '../bounded-contexts/repository-analysis/domain/models/repository.entity';
+import {
+  GenerateTestsCommand,
+  CreatePullRequestCommand,
+} from '../bounded-contexts/test-generation/application/commands';
+import { TestGenerationRequest } from '../bounded-contexts/test-generation/domain/models/test-generation-request.entity';
 
 const execAsync = promisify(exec);
 
@@ -26,7 +30,6 @@ export class CoverageService {
   private readonly logger = new Logger(CoverageService.name);
 
   constructor(
-    private readonly claudeService: ClaudeService,
     private readonly commandBus: CommandBus,
     private readonly queryBus: QueryBus,
     private readonly repositoryCache: RepositoryCacheService,
@@ -252,26 +255,33 @@ export class CoverageService {
       ),
     );
 
-    const result = await this.claudeService.generateTests(
-      workDir,
-      job.targetFilePath!,
-      async (output: string) => {
-        await this.commandBus.execute(
-          new AppendJobOutputCommand(jobId, output),
-        );
-      },
+    // Use Test Generation Context to generate tests
+    const testGenerationRequest: TestGenerationRequest = await this.commandBus.execute(
+      new GenerateTestsCommand(
+        job.repositoryUrl, // repositoryId
+        workDir,
+        job.targetFilePath!,
+        async (output: string) => {
+          await this.commandBus.execute(
+            new AppendJobOutputCommand(jobId, output),
+          );
+        },
+      ),
     );
 
-    // Store session ID if available
-    if (result.sessionId) {
-      job.setSessionId(result.sessionId);
+    // Store session ID and test generation request ID
+    if (testGenerationRequest.sessionId) {
+      job.setSessionId(testGenerationRequest.sessionId);
       await this.commandBus.execute(
         new AppendJobOutputCommand(
           jobId,
-          `Session ID saved: ${result.sessionId}`,
+          `Session ID saved: ${testGenerationRequest.sessionId}`,
         ),
       );
     }
+
+    // Store test generation request ID
+    job.setTestGenerationRequestId(testGenerationRequest.id.getValue());
 
     await this.commandBus.execute(
       new AppendJobOutputCommand(
@@ -282,8 +292,8 @@ export class CoverageService {
 
     job.setTestGenerationResult({
       filePath: job.targetFilePath!,
-      testFilePath: result.testFilePath,
-      coverage: result.coverage,
+      testFilePath: testGenerationRequest.testFilePath,
+      coverage: testGenerationRequest.coverage,
     });
   }
 
@@ -296,9 +306,11 @@ export class CoverageService {
       );
     }
 
-    const workDir = job.entrypoint
-      ? `${job.repositoryPath}/${job.entrypoint}`
-      : job.repositoryPath!;
+    if (!job.testGenerationRequestId) {
+      throw new Error(
+        'Cannot create PR: test generation request ID missing',
+      );
+    }
 
     await this.commandBus.execute(
       new UpdateJobStatusCommand(jobId, JobStatus.CREATING_PR),
@@ -310,26 +322,28 @@ export class CoverageService {
       ),
     );
 
-    const result = await this.claudeService.createPullRequest(
-      workDir,
-      job.sessionId!,
-      async (output: string) => {
-        await this.commandBus.execute(
-          new AppendJobOutputCommand(jobId, output),
-        );
-      },
+    // Use Test Generation Context to create PR
+    const prResult: TestGenerationRequest = await this.commandBus.execute(
+      new CreatePullRequestCommand(
+        job.testGenerationRequestId,
+        async (output: string) => {
+          await this.commandBus.execute(
+            new AppendJobOutputCommand(jobId, output),
+          );
+        },
+      ),
     );
 
     await this.commandBus.execute(
       new AppendJobOutputCommand(
         jobId,
-        `Pull request created successfully: ${result.prUrl}`,
+        `Pull request created successfully: ${prResult.pullRequest!.url}`,
       ),
     );
 
     job.setPRCreationResult({
-      prUrl: result.prUrl,
-      prNumber: result.prNumber,
+      prUrl: prResult.pullRequest!.url,
+      prNumber: prResult.pullRequest!.number,
     });
   }
 
