@@ -1,0 +1,62 @@
+import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
+import { Inject, Logger, NotFoundException } from '@nestjs/common';
+import { AnalyzeCoverageCommand } from './analyze-coverage.command';
+import { Repository } from '../../domain/models/repository.entity';
+import { RepositoryId } from '../../domain/models/repository-id.value-object';
+import type { IRepositoryRepository } from '../../domain/repositories/repository.repository.interface';
+import { REPOSITORY_REPOSITORY } from '../../domain/repositories/repository.repository.interface';
+import type { ICoverageAnalyzer } from '../../domain/services/coverage-analyzer.interface';
+import { COVERAGE_ANALYZER } from '../../domain/services/coverage-analyzer.interface';
+
+@CommandHandler(AnalyzeCoverageCommand)
+export class AnalyzeCoverageHandler
+  implements ICommandHandler<AnalyzeCoverageCommand>
+{
+  private readonly logger = new Logger(AnalyzeCoverageHandler.name);
+
+  constructor(
+    @Inject(REPOSITORY_REPOSITORY)
+    private readonly repositoryRepository: IRepositoryRepository,
+    @Inject(COVERAGE_ANALYZER)
+    private readonly coverageAnalyzer: ICoverageAnalyzer,
+  ) {}
+
+  async execute(command: AnalyzeCoverageCommand): Promise<Repository> {
+    const { repositoryId: idString, onOutput } = command;
+
+    this.logger.log(`Analyzing coverage for repository: ${idString}`);
+
+    // Get repository
+    const repositoryId = RepositoryId.create(idString);
+    const repository = await this.repositoryRepository.findById(repositoryId);
+
+    if (!repository) {
+      throw new NotFoundException(`Repository ${idString} not found`);
+    }
+
+    if (!repository.isCloned()) {
+      throw new Error('Repository must be cloned before analyzing coverage');
+    }
+
+    // Get working directory
+    const workingDirectory = repository.getWorkingDirectory();
+
+    // Analyze coverage
+    const fileCoverages = await this.coverageAnalyzer.analyze(
+      workingDirectory,
+      onOutput,
+    );
+
+    // Set coverage results (publishes CoverageAnalysisCompletedEvent)
+    repository.setCoverageResults(fileCoverages);
+
+    // Save to repository
+    await this.repositoryRepository.save(repository);
+
+    this.logger.log(
+      `Coverage analysis completed: ${fileCoverages.length} files analyzed`,
+    );
+
+    return repository;
+  }
+}
