@@ -21,8 +21,10 @@ import {
   JobResultResponseDto,
 } from './dto/job-response.dto';
 import { CreateJobCommand } from '../bounded-contexts/job-processing/application/commands';
-import { GetJobQuery } from '../bounded-contexts/job-processing/application/queries';
+import { GetJobQuery, GetJobLogsQuery } from '../bounded-contexts/job-processing/application/queries';
 import { Job } from '../bounded-contexts/job-processing/domain/models/job.entity';
+import { CloneRepositoryCommand } from '../bounded-contexts/repository-analysis/application/commands';
+import { Repository } from '../bounded-contexts/repository-analysis/domain/models/repository.entity';
 
 @ApiTags('jobs')
 @Controller('jobs')
@@ -53,28 +55,40 @@ export class CoverageController {
     @Body() dto: CreateJobDto,
   ): Promise<JobCreatedResponseDto> {
     let job: Job;
+    let repositoryUrl: string;
 
     if (dto.jobId) {
       // Fetch parent job to get repository details and create a child job
       const parentJob = await this.queryBus.execute(new GetJobQuery(dto.jobId));
 
-      // Create a new child job that references the parent
+      // Create a new child job that references the parent's repository
       job = await this.commandBus.execute(
         new CreateJobCommand(
-          parentJob.repositoryUrl,
-          parentJob.entrypoint,
+          parentJob.repositoryId,
           dto.targetFilePath,
           dto.jobId, // parentJobId
         ),
       );
+
+      // TODO: Fetch repository to get URL for response
+      repositoryUrl = dto.repositoryUrl || 'unknown'; // Temporary until we add repository query
     } else {
       // Create new job - repositoryUrl is required when jobId is not provided
       if (!dto.repositoryUrl) {
         throw new Error('repositoryUrl is required when jobId is not provided');
       }
-      job = await this.commandBus.execute(
-        new CreateJobCommand(dto.repositoryUrl, dto.entrypoint, dto.targetFilePath),
+
+      // First, ensure repository exists (clone command is idempotent)
+      const repository: Repository = await this.commandBus.execute(
+        new CloneRepositoryCommand(dto.repositoryUrl, dto.entrypoint),
       );
+
+      // Create job with repository ID
+      job = await this.commandBus.execute(
+        new CreateJobCommand(repository.id.getValue(), dto.targetFilePath),
+      );
+
+      repositoryUrl = dto.repositoryUrl;
     }
 
     // Start async processing
@@ -84,7 +98,7 @@ export class CoverageController {
 
     return {
       jobId: job.id.getValue(),
-      repositoryUrl: job.repositoryUrl,
+      repositoryUrl,
       status: job.status,
       message: dto.jobId
         ? `Created child job ${job.id.getValue()} for test generation (reusing analysis from ${dto.jobId})`
@@ -115,11 +129,15 @@ export class CoverageController {
   })
   async getJobResult(@Param('jobId') jobId: string): Promise<JobResultResponseDto> {
     const job: Job = await this.queryBus.execute(new GetJobQuery(jobId));
+    const output: string[] = await this.queryBus.execute(new GetJobLogsQuery(jobId));
+
+    // TODO: Fetch repository to get URL - for now return placeholder
+    const repositoryUrl = 'unknown'; // Temporary until we add repository query
 
     return {
       jobId: job.id.getValue(),
       parentJobId: job.parentJobId,
-      repositoryUrl: job.repositoryUrl,
+      repositoryUrl,
       status: job.status,
       totalFiles: job.coverageResult?.totalFiles,
       averageCoverage: job.coverageResult?.averageCoverage,
@@ -127,7 +145,7 @@ export class CoverageController {
       testGenerationResult: job.testGenerationResult,
       prCreationResult: job.prCreationResult,
       error: job.error,
-      output: job.output,
+      output,
     };
   }
 }

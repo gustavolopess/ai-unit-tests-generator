@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
 import { CqrsModule } from '@nestjs/cqrs';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { RepositoryCacheService } from './infrastructure/repository-cache.service';
 import { RepositoryCacheController } from './repository-cache.controller';
-import { InMemoryRepositoryRepository } from './infrastructure/in-memory-repository.repository';
+import { TypeOrmRepositoryRepository } from './infrastructure/typeorm-repository.repository';
+import { RepositoryEntity } from './infrastructure/entities/repository.entity';
+import { FileCoverageEntity } from './infrastructure/entities/file-coverage.entity';
 import { GitService } from './infrastructure/git.service';
 import { CoverageAnalyzerService } from './infrastructure/coverage-analyzer.service';
 import { REPOSITORY_REPOSITORY } from './domain/repositories/repository.repository.interface';
@@ -22,12 +25,15 @@ const CommandHandlers = [CloneRepositoryHandler, AnalyzeCoverageHandler];
 const QueryHandlers = [GetRepositoryHandler];
 
 @Module({
-  imports: [CqrsModule],
+  imports: [
+    CqrsModule,
+    TypeOrmModule.forFeature([RepositoryEntity, FileCoverageEntity]),
+  ],
   controllers: [RepositoryCacheController],
   providers: [
     {
       provide: REPOSITORY_REPOSITORY,
-      useClass: InMemoryRepositoryRepository,
+      useClass: TypeOrmRepositoryRepository,
     },
     {
       provide: GIT_SERVICE,

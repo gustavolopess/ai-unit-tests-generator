@@ -5,17 +5,19 @@ import { promisify } from 'util';
 import { FileCoverageDto } from './dto/coverage-response.dto';
 import {
   UpdateJobStatusCommand,
-  AppendJobOutputCommand,
+  AppendJobLogCommand,
   SetJobErrorCommand,
+  SetRepositoryPathCommand,
+  SetCoverageResultCommand,
+  SetTestGenerationDataCommand,
+  SetPRResultCommand,
 } from '../bounded-contexts/job-processing/application/commands';
 import { GetJobQuery } from '../bounded-contexts/job-processing/application/queries';
 import { JobStatus } from '../bounded-contexts/job-processing/domain/models/job-status.enum';
 import { Job } from '../bounded-contexts/job-processing/domain/models/job.entity';
 import { RepositoryCacheService } from '../bounded-contexts/repository-analysis/infrastructure/repository-cache.service';
-import {
-  CloneRepositoryCommand,
-  AnalyzeCoverageCommand,
-} from '../bounded-contexts/repository-analysis/application/commands';
+import { AnalyzeCoverageCommand } from '../bounded-contexts/repository-analysis/application/commands';
+import { GetRepositoryQuery } from '../bounded-contexts/repository-analysis/application/queries';
 import { Repository } from '../bounded-contexts/repository-analysis/domain/models/repository.entity';
 import {
   GenerateTestsCommand,
@@ -40,15 +42,21 @@ export class CoverageService {
    */
   async processJobStages(jobId: string): Promise<void> {
     try {
-      const job: Job = await this.queryBus.execute(new GetJobQuery(jobId));
+      let job: Job = await this.queryBus.execute(new GetJobQuery(jobId));
 
       // Stage 1: Clone repository (if needed)
       if (job.needsCloning()) {
         await this.cloneRepositoryStage(jobId);
+        // Refresh job after cloning
+        job = await this.queryBus.execute(new GetJobQuery(jobId));
       }
 
       // Stage 2: Install dependencies (if needed)
-      await this.installDependenciesStage(jobId);
+      if (job.repositoryPath) {
+        await this.installDependenciesStage(jobId);
+        // Refresh job after installation
+        job = await this.queryBus.execute(new GetJobQuery(jobId));
+      }
 
       // Stage 3: Analyze coverage (if needed)
       if (job.needsCoverageAnalysis()) {
@@ -56,6 +64,8 @@ export class CoverageService {
         await this.commandBus.execute(
           new UpdateJobStatusCommand(jobId, JobStatus.ANALYSIS_COMPLETED),
         );
+        // Refresh job after analysis
+        job = await this.queryBus.execute(new GetJobQuery(jobId));
       }
 
       // Stage 4: Generate tests (if needed and requested)
@@ -64,6 +74,8 @@ export class CoverageService {
         await this.commandBus.execute(
           new UpdateJobStatusCommand(jobId, JobStatus.TEST_GENERATION_COMPLETED),
         );
+        // Refresh job after test generation
+        job = await this.queryBus.execute(new GetJobQuery(jobId));
       }
 
       // Stage 5: Create PR (if needed and possible)
@@ -79,14 +91,14 @@ export class CoverageService {
         new UpdateJobStatusCommand(jobId, JobStatus.COMPLETED),
       );
       await this.commandBus.execute(
-        new AppendJobOutputCommand(jobId, 'All stages completed successfully!'),
+        new AppendJobLogCommand(jobId, 'All stages completed successfully!'),
       );
 
       this.logger.log(`Job ${jobId} completed all stages successfully`);
     } catch (error) {
       this.logger.error(`Job ${jobId} failed: ${error.message}`);
       await this.commandBus.execute(
-        new AppendJobOutputCommand(jobId, `ERROR: ${error.message}`),
+        new AppendJobLogCommand(jobId, `ERROR: ${error.message}`),
       );
       await this.commandBus.execute(
         new SetJobErrorCommand(jobId, error.message),
@@ -96,18 +108,24 @@ export class CoverageService {
 
   private async cloneRepositoryStage(jobId: string): Promise<void> {
     const job: Job = await this.queryBus.execute(new GetJobQuery(jobId));
+    const repository: Repository = await this.queryBus.execute(
+      new GetRepositoryQuery(job.repositoryId),
+    );
 
     // Check if repository is already cached
-    const cachedPath = this.repositoryCache.getCachedPath(job.repositoryUrl);
+    const repositoryUrl = repository.url.getValue();
+    const cachedPath = this.repositoryCache.getCachedPath(repositoryUrl);
 
     if (cachedPath) {
       await this.commandBus.execute(
-        new AppendJobOutputCommand(
+        new AppendJobLogCommand(
           jobId,
           `Using cached repository at ${cachedPath}`,
         ),
       );
-      job.setRepositoryPath(cachedPath);
+      await this.commandBus.execute(
+        new SetRepositoryPathCommand(jobId, cachedPath),
+      );
       return;
     }
 
@@ -115,47 +133,44 @@ export class CoverageService {
       new UpdateJobStatusCommand(jobId, JobStatus.CLONING),
     );
     await this.commandBus.execute(
-      new AppendJobOutputCommand(
+      new AppendJobLogCommand(
         jobId,
-        `Cloning repository ${job.repositoryUrl}...`,
+        `Cloning repository ${repositoryUrl}...`,
       ),
     );
 
-    // Use Repository Analysis Context to clone
-    const repository: Repository = await this.commandBus.execute(
-      new CloneRepositoryCommand(job.repositoryUrl, job.entrypoint),
-    );
-
+    // Repository should already be cloned from controller, just use the path
     const repoPath = repository.localPath!;
 
     await this.commandBus.execute(
-      new AppendJobOutputCommand(jobId, `Repository cloned to ${repoPath}`),
+      new AppendJobLogCommand(jobId, `Repository at ${repoPath}`),
     );
 
     // Cache the repository path
-    this.repositoryCache.setCachedPath(job.repositoryUrl, repoPath);
+    this.repositoryCache.setCachedPath(repositoryUrl, repoPath);
 
-    // Update job with repository path and repository ID
-    job.setRepositoryPath(repoPath);
+    // Update job with repository path using command to persist to database
+    await this.commandBus.execute(
+      new SetRepositoryPathCommand(jobId, repoPath),
+    );
   }
 
   private async installDependenciesStage(jobId: string): Promise<void> {
     const job: Job = await this.queryBus.execute(new GetJobQuery(jobId));
-
-    if (!job.repositoryPath) {
-      throw new Error('Cannot install dependencies: repository not cloned');
-    }
+    const repository: Repository = await this.queryBus.execute(
+      new GetRepositoryQuery(job.repositoryId),
+    );
 
     // Determine working directory based on entrypoint
-    const workDir = job.entrypoint
-      ? `${job.repositoryPath}/${job.entrypoint}`
-      : job.repositoryPath;
+    const workDir = repository.entrypoint
+      ? `${job.repositoryPath}/${repository.entrypoint}`
+      : job.repositoryPath!;
 
-    if (job.entrypoint) {
+    if (repository.entrypoint) {
       await this.commandBus.execute(
-        new AppendJobOutputCommand(
+        new AppendJobLogCommand(
           jobId,
-          `Using entrypoint directory: ${job.entrypoint}`,
+          `Using entrypoint directory: ${repository.entrypoint}`,
         ),
       );
     }
@@ -164,18 +179,21 @@ export class CoverageService {
       new UpdateJobStatusCommand(jobId, JobStatus.INSTALLING),
     );
     await this.commandBus.execute(
-      new AppendJobOutputCommand(jobId, 'Running npm install...'),
+      new AppendJobLogCommand(jobId, 'Running npm install...'),
     );
 
     await this.runNpmInstall(workDir);
 
     await this.commandBus.execute(
-      new AppendJobOutputCommand(jobId, 'npm install completed'),
+      new AppendJobLogCommand(jobId, 'npm install completed'),
     );
   }
 
   private async analyzeCoverageStage(jobId: string): Promise<void> {
     const job: Job = await this.queryBus.execute(new GetJobQuery(jobId));
+    const repository: Repository = await this.queryBus.execute(
+      new GetRepositoryQuery(job.repositoryId),
+    );
 
     if (!job.repositoryPath) {
       throw new Error('Cannot analyze coverage: repository not cloned');
@@ -185,14 +203,11 @@ export class CoverageService {
       new UpdateJobStatusCommand(jobId, JobStatus.ANALYZING),
     );
     await this.commandBus.execute(
-      new AppendJobOutputCommand(jobId, 'Starting Claude coverage analysis...'),
+      new AppendJobLogCommand(jobId, 'Starting Claude coverage analysis...'),
     );
 
-    // Find the repository in Repository Analysis Context
-    // We'll use the cache to find the repository by URL
-    const repository: Repository = await this.commandBus.execute(
-      new CloneRepositoryCommand(job.repositoryUrl, job.entrypoint),
-    );
+    // Use Repository Analysis Context to analyze coverage
+    // Repository already exists from cloneRepositoryStage
 
     // Use Repository Analysis Context to analyze coverage
     const analyzedRepository: Repository = await this.commandBus.execute(
@@ -200,14 +215,14 @@ export class CoverageService {
         repository.id.getValue(),
         async (output: string) => {
           await this.commandBus.execute(
-            new AppendJobOutputCommand(jobId, output),
+            new AppendJobLogCommand(jobId, output),
           );
         },
       ),
     );
 
     await this.commandBus.execute(
-      new AppendJobOutputCommand(
+      new AppendJobLogCommand(
         jobId,
         'Coverage analysis completed, processing results...',
       ),
@@ -222,10 +237,14 @@ export class CoverageService {
     );
 
     const result = this.buildCoverageResult(fileCoverages);
-    job.setCoverageResult(result);
+
+    // Persist coverage result to database using command
+    await this.commandBus.execute(
+      new SetCoverageResultCommand(jobId, result),
+    );
 
     await this.commandBus.execute(
-      new AppendJobOutputCommand(
+      new AppendJobLogCommand(
         jobId,
         `Coverage analysis complete: ${result.totalFiles} files, ${result.averageCoverage}% average coverage`,
       ),
@@ -234,6 +253,9 @@ export class CoverageService {
 
   private async generateTestsStage(jobId: string): Promise<void> {
     const job: Job = await this.queryBus.execute(new GetJobQuery(jobId));
+    const repository: Repository = await this.queryBus.execute(
+      new GetRepositoryQuery(job.repositoryId),
+    );
 
     if (!job.canGenerateTests()) {
       throw new Error(
@@ -241,15 +263,15 @@ export class CoverageService {
       );
     }
 
-    const workDir = job.entrypoint
-      ? `${job.repositoryPath}/${job.entrypoint}`
+    const workDir = repository.entrypoint
+      ? `${job.repositoryPath}/${repository.entrypoint}`
       : job.repositoryPath!;
 
     await this.commandBus.execute(
       new UpdateJobStatusCommand(jobId, JobStatus.GENERATING_TESTS),
     );
     await this.commandBus.execute(
-      new AppendJobOutputCommand(
+      new AppendJobLogCommand(
         jobId,
         `Starting test generation for ${job.targetFilePath}...`,
       ),
@@ -258,43 +280,46 @@ export class CoverageService {
     // Use Test Generation Context to generate tests
     const testGenerationRequest: TestGenerationRequest = await this.commandBus.execute(
       new GenerateTestsCommand(
-        job.repositoryUrl, // repositoryId
+        repository.url.getValue(), // repositoryId
         workDir,
         job.targetFilePath!,
         async (output: string) => {
           await this.commandBus.execute(
-            new AppendJobOutputCommand(jobId, output),
+            new AppendJobLogCommand(jobId, output),
           );
         },
       ),
     );
 
-    // Store session ID and test generation request ID
     if (testGenerationRequest.sessionId) {
-      job.setSessionId(testGenerationRequest.sessionId);
       await this.commandBus.execute(
-        new AppendJobOutputCommand(
+        new AppendJobLogCommand(
           jobId,
           `Session ID saved: ${testGenerationRequest.sessionId}`,
         ),
       );
     }
 
-    // Store test generation request ID
-    job.setTestGenerationRequestId(testGenerationRequest.id.getValue());
-
     await this.commandBus.execute(
-      new AppendJobOutputCommand(
+      new AppendJobLogCommand(
         jobId,
         'Test generation completed successfully',
       ),
     );
 
-    job.setTestGenerationResult({
-      filePath: job.targetFilePath!,
-      testFilePath: testGenerationRequest.testFilePath,
-      coverage: testGenerationRequest.coverage,
-    });
+    // Persist test generation data to database using command
+    await this.commandBus.execute(
+      new SetTestGenerationDataCommand(
+        jobId,
+        testGenerationRequest.sessionId,
+        testGenerationRequest.id.getValue(),
+        {
+          filePath: job.targetFilePath!,
+          testFilePath: testGenerationRequest.testFilePath,
+          coverage: testGenerationRequest.coverage,
+        },
+      ),
+    );
   }
 
   private async createPRStage(jobId: string): Promise<void> {
@@ -316,7 +341,7 @@ export class CoverageService {
       new UpdateJobStatusCommand(jobId, JobStatus.CREATING_PR),
     );
     await this.commandBus.execute(
-      new AppendJobOutputCommand(
+      new AppendJobLogCommand(
         jobId,
         `Creating pull request using session ${job.sessionId}...`,
       ),
@@ -328,23 +353,26 @@ export class CoverageService {
         job.testGenerationRequestId,
         async (output: string) => {
           await this.commandBus.execute(
-            new AppendJobOutputCommand(jobId, output),
+            new AppendJobLogCommand(jobId, output),
           );
         },
       ),
     );
 
     await this.commandBus.execute(
-      new AppendJobOutputCommand(
+      new AppendJobLogCommand(
         jobId,
         `Pull request created successfully: ${prResult.pullRequest!.url}`,
       ),
     );
 
-    job.setPRCreationResult({
-      prUrl: prResult.pullRequest!.url,
-      prNumber: prResult.pullRequest!.number,
-    });
+    // Persist PR result to database using command
+    await this.commandBus.execute(
+      new SetPRResultCommand(jobId, {
+        prUrl: prResult.pullRequest!.url,
+        prNumber: prResult.pullRequest!.number,
+      }),
+    );
   }
 
   private async runNpmInstall(repoPath: string): Promise<void> {
@@ -395,7 +423,7 @@ export class CoverageService {
       // Cleanup is now handled by the Repository Analysis Context
       // The GitService.cleanup() is currently disabled to allow repository reuse
       await this.commandBus.execute(
-        new AppendJobOutputCommand(jobId, 'Repository cleanup skipped (cached for reuse)'),
+        new AppendJobLogCommand(jobId, 'Repository cleanup skipped (cached for reuse)'),
       );
     }
 

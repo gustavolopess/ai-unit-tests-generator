@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { CqrsModule } from '@nestjs/cqrs';
-import { InMemoryTestGenerationRequestRepository } from './infrastructure/in-memory-test-generation-request.repository';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { TypeOrmTestGenerationRequestRepository } from './infrastructure/typeorm-test-generation-request.repository';
+import { TestGenerationRequestEntity } from './infrastructure/entities/test-generation-request.entity';
 import { AITestGeneratorService } from './infrastructure/ai-test-generator.service';
 import { ClaudePullRequestCreatorService } from './infrastructure/claude-pull-request-creator.service';
 import { TEST_GENERATION_REQUEST_REPOSITORY } from './domain/repositories/test-generation-request.repository.interface';
@@ -20,11 +22,11 @@ const CommandHandlers = [GenerateTestsHandler, CreatePullRequestHandler];
 const QueryHandlers = [GetTestGenerationRequestHandler];
 
 @Module({
-  imports: [CqrsModule],
+  imports: [CqrsModule, TypeOrmModule.forFeature([TestGenerationRequestEntity])],
   providers: [
     {
       provide: TEST_GENERATION_REQUEST_REPOSITORY,
-      useClass: InMemoryTestGenerationRequestRepository,
+      useClass: TypeOrmTestGenerationRequestRepository,
     },
     {
       provide: TEST_GENERATOR,

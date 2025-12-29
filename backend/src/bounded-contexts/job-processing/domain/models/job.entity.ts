@@ -7,8 +7,7 @@ import { JobCompletedEvent } from '../events/job-completed.event';
 import { JobFailedEvent } from '../events/job-failed.event';
 
 export interface JobProps {
-  repositoryUrl: string;
-  entrypoint?: string;
+  repositoryId: string; // FK to repositories table
   targetFilePath?: string; // File to generate tests for (optional)
   parentJobId?: string; // Reference to parent job for reusing analysis results
   status: JobStatus;
@@ -16,7 +15,7 @@ export interface JobProps {
   updatedAt: Date;
   startedAt?: Date;
   completedAt?: Date;
-  output: string[];
+  logPath?: string; // Path to log file (e.g., data/logs/<job_id>.log)
   error?: string;
   repositoryPath?: string;
   sessionId?: string;
@@ -46,24 +45,21 @@ export class Job extends AggregateRoot<JobId> {
   }
 
   static create(
-    repositoryUrl: string,
-    entrypoint?: string,
+    repositoryId: string,
     targetFilePath?: string,
     parentJobId?: string,
   ): Job {
     const jobId = JobId.generate();
     const job = new Job(jobId, {
-      repositoryUrl,
-      entrypoint,
+      repositoryId,
       targetFilePath,
       parentJobId,
       status: JobStatus.PENDING,
       createdAt: new Date(),
       updatedAt: new Date(),
-      output: [],
     });
 
-    job.apply(new JobCreatedEvent(jobId, repositoryUrl));
+    job.apply(new JobCreatedEvent(jobId, repositoryId));
     return job;
   }
 
@@ -72,12 +68,8 @@ export class Job extends AggregateRoot<JobId> {
   }
 
   // Getters
-  get repositoryUrl(): string {
-    return this.props.repositoryUrl;
-  }
-
-  get entrypoint(): string | undefined {
-    return this.props.entrypoint;
+  get repositoryId(): string {
+    return this.props.repositoryId;
   }
 
   get targetFilePath(): string | undefined {
@@ -108,8 +100,8 @@ export class Job extends AggregateRoot<JobId> {
     return this.props.completedAt;
   }
 
-  get output(): string[] {
-    return [...this.props.output];
+  get logPath(): string | undefined {
+    return this.props.logPath;
   }
 
   get error(): string | undefined {
@@ -164,8 +156,8 @@ export class Job extends AggregateRoot<JobId> {
     this.apply(new JobStatusChangedEvent(this.id, previousStatus, newStatus));
   }
 
-  appendOutput(output: string): void {
-    this.props.output.push(output);
+  setLogPath(logPath: string): void {
+    this.props.logPath = logPath;
     this.props.updatedAt = new Date();
   }
 
@@ -261,27 +253,27 @@ export class Job extends AggregateRoot<JobId> {
   }
 
   needsCoverageAnalysis(): boolean {
-    return this.props.coverageResult === undefined;
+    return this.props.coverageResult == null;
   }
 
   needsTestGeneration(): boolean {
-    return this.props.targetFilePath !== undefined &&
-           this.props.testGenerationResult === undefined;
+    return this.props.targetFilePath != null &&
+           this.props.testGenerationResult == null;
   }
 
   needsPRCreation(): boolean {
-    return this.props.testGenerationResult !== undefined &&
-           this.props.prCreationResult === undefined &&
-           this.props.sessionId !== undefined;
+    return this.props.testGenerationResult != null &&
+           this.props.prCreationResult == null &&
+           this.props.sessionId != null;
   }
 
   canGenerateTests(): boolean {
-    return this.props.repositoryPath !== undefined &&
-           this.props.targetFilePath !== undefined;
+    return this.props.repositoryPath != null &&
+           this.props.targetFilePath != null;
   }
 
   canCreatePR(): boolean {
-    return this.props.sessionId !== undefined &&
-           this.props.testGenerationResult !== undefined;
+    return this.props.sessionId != null &&
+           this.props.testGenerationResult != null;
   }
 }

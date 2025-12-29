@@ -42,17 +42,17 @@ export class JobResponseDto {
   })
   output: string[];
 
-  static fromDomain(job: Job): JobResponseDto {
+  static fromDomain(job: Job, repositoryUrl: string, output: string[]): JobResponseDto {
     return {
       jobId: job.id.getValue(),
-      repositoryUrl: job.repositoryUrl,
+      repositoryUrl,
       status: job.status,
       createdAt: job.createdAt,
       updatedAt: job.updatedAt,
       startedAt: job.startedAt,
       completedAt: job.completedAt,
       error: job.error,
-      output: job.output,
+      output,
     };
   }
 }
