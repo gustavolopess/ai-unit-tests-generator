@@ -9,6 +9,7 @@ import { JobFailedEvent } from '../events/job-failed.event';
 export interface JobProps {
   repositoryId: string; // FK to repositories table
   targetFilePath?: string; // File to generate tests for (optional)
+  entrypoint?: string; // Optional subdirectory path for monorepos
   parentJobId?: string; // Reference to parent job for reusing analysis results
   status: JobStatus;
   createdAt: Date;
@@ -48,11 +49,13 @@ export class Job extends AggregateRoot<JobId> {
     repositoryId: string,
     targetFilePath?: string,
     parentJobId?: string,
+    entrypoint?: string,
   ): Job {
     const jobId = JobId.generate();
     const job = new Job(jobId, {
       repositoryId,
       targetFilePath,
+      entrypoint,
       parentJobId,
       status: JobStatus.PENDING,
       createdAt: new Date(),
@@ -74,6 +77,10 @@ export class Job extends AggregateRoot<JobId> {
 
   get targetFilePath(): string | undefined {
     return this.props.targetFilePath;
+  }
+
+  get entrypoint(): string | undefined {
+    return this.props.entrypoint;
   }
 
   get parentJobId(): string | undefined {

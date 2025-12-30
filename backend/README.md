@@ -87,27 +87,35 @@ The Swagger interface provides:
 
 ## API Endpoints
 
-The service uses a job-based asynchronous architecture with three types of jobs:
+The service uses a unified job-based asynchronous architecture. All jobs are created via a single endpoint: `POST /jobs` and retrieved via `GET /jobs/:jobId`.
 
-1. **coverage-analyzer**: Clones repository and analyzes test coverage
-2. **tests-generator**: Generates unit tests for specific files  
-3. **pr-creator**: Creates GitHub pull requests with generated tests
+The system automatically determines which stages to execute based on the parameters you provide:
+- **Coverage Analysis Only**: Provide just `repositoryUrl`
+- **Coverage + Test Generation**: Provide `repositoryUrl` + `targetFilePath`
+- **Coverage + Test Generation + PR Creation**: Provide `repositoryUrl` + `targetFilePath` (PR creation runs automatically)
+- **Child Job (Reuse Analysis)**: Provide `jobId` + `targetFilePath` to skip cloning and analysis stages
 
-All job endpoints follow the pattern: `/jobs/{job-type}/start` to create jobs and `/jobs/{job-type}/:jobId/result` to get results.
+### Job Creation: POST /jobs
 
-### Coverage Analyzer Jobs
+Creates and starts a new job. The system automatically determines which stages to execute based on the parameters provided.
 
-#### POST /jobs/coverage-analyzer/start
+#### Scenario 1: Coverage Analysis Only
 
-Starts a coverage analyzer job for a GitHub repository.
+Analyze test coverage for a repository without generating tests or creating PRs.
 
 **Request Body:**
 ```json
 {
-  "repositoryUrl": "https://github.com/username/repository.git",
-  "entrypoint": "packages/api"  // Optional: subdirectory for monorepos
+  "repositoryUrl": "https://github.com/username/repository.git"
 }
 ```
+
+**What Happens:**
+1. ✅ Clone repository
+2. ✅ Install dependencies (`npm install`)
+3. ✅ Analyze test coverage
+4. ❌ Skip test generation
+5. ❌ Skip PR creation
 
 **Response (HTTP 202):**
 ```json
@@ -115,18 +123,122 @@ Starts a coverage analyzer job for a GitHub repository.
   "jobId": "550e8400-e29b-41d4-a716-446655440000",
   "repositoryUrl": "https://github.com/username/repository.git",
   "status": "PENDING",
-  "message": "Coverage analyzer job created and started"
+  "message": "Job created for coverage analysis"
 }
 ```
 
-#### GET /jobs/coverage-analyzer/:jobId/result
+---
 
-Gets coverage analyzer job status and results. Poll this endpoint to monitor progress.
+#### Scenario 2: Coverage Analysis with Monorepo Entrypoint
+
+For repositories where the source code is in a subdirectory (e.g., monorepos).
+
+**Request Body:**
+```json
+{
+  "repositoryUrl": "https://github.com/org/monorepo.git",
+  "entrypoint": "packages/backend"
+}
+```
+
+**What Happens:**
+1. ✅ Clone repository
+2. ✅ Change directory to `packages/backend`
+3. ✅ Install dependencies in `packages/backend`
+4. ✅ Analyze coverage in `packages/backend`
+5. ❌ Skip test generation
+6. ❌ Skip PR creation
+
+**Response (HTTP 202):**
+```json
+{
+  "jobId": "550e8400-e29b-41d4-a716-446655440001",
+  "repositoryUrl": "https://github.com/org/monorepo.git",
+  "status": "PENDING",
+  "message": "Job created for coverage analysis"
+}
+```
+
+---
+
+#### Scenario 3: Full Workflow (Coverage + Test Generation + PR Creation)
+
+Generate tests for a specific file and automatically create a pull request.
+
+**Request Body:**
+```json
+{
+  "repositoryUrl": "https://github.com/username/repository.git",
+  "targetFilePath": "src/services/user.service.ts"
+}
+```
+
+**What Happens:**
+1. ✅ Clone repository
+2. ✅ Install dependencies
+3. ✅ Analyze test coverage
+4. ✅ Generate tests for `src/services/user.service.ts`
+5. ✅ Create pull request with generated tests
+
+**Response (HTTP 202):**
+```json
+{
+  "jobId": "550e8400-e29b-41d4-a716-446655440002",
+  "repositoryUrl": "https://github.com/username/repository.git",
+  "status": "PENDING",
+  "message": "Job created for test generation and PR creation"
+}
+```
+
+---
+
+#### Scenario 4: Child Job (Reuse Previous Analysis)
+
+Generate tests for another file using an existing job's repository and analysis results. This skips cloning, installation, and coverage analysis stages.
+
+**Use Case:** You already ran a coverage analysis job (`job-abc-123`) and want to generate tests for multiple files without re-analyzing the entire repository each time.
+
+**Request Body:**
+```json
+{
+  "jobId": "550e8400-e29b-41d4-a716-446655440000",
+  "targetFilePath": "src/services/auth.service.ts"
+}
+```
+
+**What Happens:**
+1. ❌ Skip cloning (reuse existing repository)
+2. ❌ Skip installation (dependencies already installed)
+3. ❌ Skip coverage analysis (reuse existing results)
+4. ✅ Generate tests for `src/services/auth.service.ts`
+5. ✅ Create pull request with generated tests
+
+**Response (HTTP 202):**
+```json
+{
+  "jobId": "550e8400-e29b-41d4-a716-446655440003",
+  "repositoryUrl": "https://github.com/username/repository.git",
+  "status": "PENDING",
+  "message": "Created child job 550e8400-e29b-41d4-a716-446655440003 for test generation (reusing analysis from 550e8400-e29b-41d4-a716-446655440000)"
+}
+```
+
+**Benefits of Child Jobs:**
+- ⚡ Much faster (skips clone, install, and analysis)
+- 💰 Lower cost (reuses existing Claude analysis)
+- 🔄 Efficient for generating tests for multiple files
+
+---
+
+### Job Status: GET /jobs/:jobId
+
+Gets job status and results. Poll this endpoint to monitor progress.
 
 **Response:**
 ```json
 {
   "jobId": "550e8400-e29b-41d4-a716-446655440000",
+  "parentJobId": null,
   "repositoryUrl": "https://github.com/username/repository.git",
   "status": "COMPLETED",
   "totalFiles": 15,
@@ -135,177 +247,70 @@ Gets coverage analyzer job status and results. Poll this endpoint to monitor pro
     {"file": "src/index.ts", "coverage": 85.5},
     {"file": "src/utils.ts", "coverage": 42.0}
   ],
+  "testGenerationResult": null,
+  "prCreationResult": null,
   "error": null,
   "output": [
     "Cloning repository...",
     "Repository cloned",
-    "Starting Claude analysis...",
+    "Installing dependencies...",
+    "Dependencies installed",
+    "Analyzing coverage...",
     "Analysis completed"
   ]
 }
 ```
 
 **Job Statuses:**
-- `PENDING`: Job created
-- `CLONING`: Cloning repository
-- `INSTALLING`: Installing dependencies
-- `ANALYZING`: Analyzing coverage
-- `COMPLETED`: Analysis complete
-- `FAILED`: Analysis failed
-
-### Test Generator Jobs
-
-#### POST /jobs/tests-generator/start
-
-Starts a test generator job for a specific file.
-
-**Request Body:**
-```json
-{
-  "coverageAnalyzerJobId": "550e8400-e29b-41d4-a716-446655440000",
-  "filePath": "src/utils/helpers.ts"
-}
-```
-
-**Response (HTTP 202):**
-```json
-{
-  "jobId": "550e8400-e29b-41d4-a716-446655440001",
-  "repositoryUrl": "https://github.com/username/repository.git",
-  "status": "PENDING",
-  "message": "Test generator job created for src/utils/helpers.ts"
-}
-```
-
-#### GET /jobs/tests-generator/:jobId/result
-
-Gets test generator job status and results.
-
-**Response:**
-```json
-{
-  "jobId": "550e8400-e29b-41d4-a716-446655440001",
-  "repositoryUrl": "https://github.com/username/repository.git",
-  "status": "TEST_GENERATION_COMPLETED",
-  "parentJobId": "550e8400-e29b-41d4-a716-446655440000",
-  "targetFilePath": "src/utils/helpers.ts",
-  "testGenerationResult": {
-    "filePath": "src/utils/helpers.ts",
-    "summary": "Created test file with 15 tests. Coverage improved from 42% to 87%.",
-    "testFilePath": "src/utils/helpers.spec.ts",
-    "coverage": 87
-  },
-  "error": null,
-  "output": [
-    "Starting test generation...",
-    "Session ID: xyz-789",
-    "Test generation completed"
-  ]
-}
-```
-
-**Job Statuses:**
-- `PENDING`: Job created
-- `GENERATING_TESTS`: Generating tests
-- `TEST_GENERATION_COMPLETED`: Tests generated
-- `TEST_GENERATION_FAILED`: Generation failed
-
-### PR Creator Jobs
-
-#### POST /jobs/pr-creator/start
-
-Starts a PR creator job to create a GitHub pull request.
-
-**Request Body:**
-```json
-{
-  "testGeneratorJobId": "550e8400-e29b-41d4-a716-446655440001"
-}
-```
-
-**Response (HTTP 202):**
-```json
-{
-  "jobId": "550e8400-e29b-41d4-a716-446655440002",
-  "repositoryUrl": "https://github.com/username/repository.git",
-  "status": "PENDING",
-  "message": "PR creator job created and started"
-}
-```
-
-#### GET /jobs/pr-creator/:jobId/result
-
-Gets PR creator job status and results.
-
-**Response:**
-```json
-{
-  "jobId": "550e8400-e29b-41d4-a716-446655440002",
-  "repositoryUrl": "https://github.com/username/repository.git",
-  "status": "PR_CREATED",
-  "parentJobId": "550e8400-e29b-41d4-a716-446655440001",
-  "prCreationResult": {
-    "prUrl": "https://github.com/username/repository/pull/42",
-    "prNumber": 42,
-    "summary": "Created pull request with comprehensive unit tests..."
-  },
-  "error": null,
-  "output": [
-    "Creating pull request...",
-    "Using session ID: xyz-789",
-    "PR created: https://github.com/username/repository/pull/42"
-  ]
-}
-```
-
-**Job Statuses:**
-- `PENDING`: Job created
-- `CREATING_PR`: Creating PR
-- `PR_CREATED`: PR created successfully
-- `PR_CREATION_FAILED`: PR creation failed
+- `PENDING`: Job created, not yet started
+- `CLONING`: Cloning repository from GitHub
+- `INSTALLING`: Running `npm install`
+- `ANALYZING`: Analyzing test coverage
+- `GENERATING_TESTS`: Generating unit tests for target file
+- `CREATING_PR`: Creating GitHub pull request
+- `COMPLETED`: All stages completed successfully
+- `TEST_GENERATION_COMPLETED`: Test generation completed (with or without PR)
+- `PR_CREATED`: Pull request created successfully
+- `FAILED`: Job failed at any stage
 
 ## How It Works
 
-The service uses an asynchronous job-based architecture:
+The service uses a unified asynchronous job-based architecture:
 
-1. **Job Creation**: POST to `/jobs/{type}/start` creates a job and returns immediately with a job ID. The job starts processing in the background.
+1. **Job Creation**: POST to `/jobs` creates a job and returns immediately with a job ID. The job starts processing in the background.
 
-2. **Repository Cloning** (Coverage Analyzer): The service clones the specified GitHub repository into a temporary directory.
+2. **Stage Determination**: The system automatically determines which stages to execute based on the parameters:
+   - `repositoryUrl` only → Coverage analysis
+   - `repositoryUrl` + `targetFilePath` → Coverage + Test generation + PR creation
+   - `jobId` + `targetFilePath` → Skip to test generation (reuse existing analysis)
 
-3. **Dependency Installation**: Runs `npm install` in the repository (or entrypoint subdirectory).
+3. **Repository Stage** (if not a child job):
+   - Clone the GitHub repository
+   - Change to entrypoint directory (if specified)
+   - Run `npm install`
 
-4. **Claude Analysis**: Executes Claude CLI to analyze test coverage or generate tests.
+4. **Coverage Analysis Stage** (if not a child job):
+   - Execute Claude CLI to analyze test coverage
+   - Store results in both the job and the repository
 
-5. **Job Completion**: Results are stored and can be retrieved via `/jobs/{type}/:jobId/result`.
+5. **Test Generation Stage** (if `targetFilePath` provided):
+   - Generate unit tests for the specified file using Claude CLI
+   - Capture Claude session ID for PR creation
 
-6. **Cleanup**: Use the cleanup endpoint when done with all jobs (to be implemented).
+6. **PR Creation Stage** (if `targetFilePath` provided):
+   - Create a GitHub pull request with generated tests
+   - Reuse Claude session for context continuity
+
+7. **Job Completion**: Results are stored and can be retrieved via `GET /jobs/:jobId`.
 
 ## Example Usage
 
-### Basic Coverage Analysis
+### Example 1: Simple Coverage Analysis
+
+Analyze a repository to get coverage metrics:
 
 ```bash
-# Start coverage analyzer
-curl -X POST http://localhost:3000/jobs/coverage-analyzer/start \
-  -H "Content-Type: application/json" \
-  -d '{"repositoryUrl": "https://github.com/username/repository.git"}'
-
-# Response: {"jobId": "job-1", ...}
-
-# Check result
-curl http://localhost:3000/jobs/coverage-analyzer/job-1/result
-```
-
-
-
-## Complete Workflow: From Analysis to PR
-
-This service supports a complete workflow from analyzing coverage to automatically creating pull requests with generated tests.
-
-### Step 1: Analyze Repository Coverage
-
-```bash
-curl -X POST http://localhost:3000/jobs/coverage-analyzer/start \
+curl -X POST http://localhost:3000/jobs \
   -H "Content-Type: application/json" \
   -d '{"repositoryUrl": "https://github.com/username/repository.git"}'
 ```
@@ -313,135 +318,110 @@ curl -X POST http://localhost:3000/jobs/coverage-analyzer/start \
 Response:
 ```json
 {
-  "jobId": "analysis-abc-123",
+  "jobId": "abc-123",
+  "repositoryUrl": "https://github.com/username/repository.git",
   "status": "PENDING",
-  "message": "Job created and processing started"
+  "message": "Job created for coverage analysis"
 }
 ```
 
-### Step 2: Monitor Analysis and Get Results
-
-Poll the result endpoint until `status` is `COMPLETED`:
-
+Check the result:
 ```bash
-curl http://localhost:3000/jobs/coverage-analyzer/analysis-abc-123/result
+curl http://localhost:3000/jobs/abc-123
 ```
 
-From the response, identify files with low coverage (e.g., `src/utils/helpers.ts` with 42% coverage).
+---
 
-### Step 3: Generate Tests for Low Coverage File
+### Example 2: Full Workflow (Analysis + Tests + PR)
+
+Generate tests for a specific file and create a PR in one job:
 
 ```bash
-curl -X POST http://localhost:3000/jobs/tests-generator/start \
+curl -X POST http://localhost:3000/jobs \
   -H "Content-Type: application/json" \
   -d '{
-    "coverageAnalyzerJobId": "analysis-abc-123",
-    "filePath": "src/utils/helpers.ts"
+    "repositoryUrl": "https://github.com/username/repository.git",
+    "targetFilePath": "src/services/user.service.ts"
   }'
 ```
 
 Response:
 ```json
 {
-  "jobId": "test-def-456",
-  "status": "PENDING",
-  "message": "Test generation job created for src/utils/helpers.ts"
-}
-```
-
-### Step 4: Monitor Test Generation and Get Results
-
-Poll the result endpoint to watch progress:
-
-```bash
-curl http://localhost:3000/jobs/tests-generator/test-def-456/result
-```
-
-Watch the `status` field change from `GENERATING_TESTS` to `TEST_GENERATION_COMPLETED`, and the `output` field for real-time progress including "Session ID saved: xyz-789".
-
-Response (when completed):
-```json
-{
-  "jobId": "test-def-456",
+  "jobId": "def-456",
   "repositoryUrl": "https://github.com/username/repository.git",
-  "status": "TEST_GENERATION_COMPLETED",
-  "parentJobId": "analysis-abc-123",
-  "targetFilePath": "src/utils/helpers.ts",
-  "testGenerationResult": {
-    "filePath": "src/utils/helpers.ts",
-    "summary": "Created test file at src/utils/helpers.spec.ts with 15 tests. Coverage improved from 42% to 87%.",
-    "testFilePath": "src/utils/helpers.spec.ts",
-    "coverage": 87
-  },
-  "error": null,
-  "output": [
-    "Starting test generation for src/utils/helpers.ts...",
-    "[Claude] ...",
-    "Test generation completed",
-    "Session ID: xyz-789",
-    "Test generation completed successfully"
-  ]
+  "status": "PENDING",
+  "message": "Job created for test generation and PR creation"
 }
 ```
 
-### Step 5: Create Pull Request with Changes
+Monitor progress:
+```bash
+curl http://localhost:3000/jobs/def-456
+```
+
+The job will automatically:
+1. Clone the repository
+2. Analyze coverage
+3. Generate tests for `src/services/user.service.ts`
+4. Create a pull request with the changes
+
+---
+
+### Example 3: Generate Tests for Multiple Files Efficiently
+
+First, run a coverage analysis:
 
 ```bash
-curl -X POST http://localhost:3000/jobs/pr-creator/start \
+curl -X POST http://localhost:3000/jobs \
   -H "Content-Type: application/json" \
-  -d '{"testGeneratorJobId": "test-def-456"}'
+  -d '{"repositoryUrl": "https://github.com/username/repository.git"}'
 ```
 
-Response:
-```json
-{
-  "jobId": "pr-ghi-789",
-  "status": "PENDING",
-  "message": "PR creation job started"
-}
-```
+Response: `{"jobId": "analysis-job-123", ...}`
 
-### Step 6: Monitor PR Creation and Get Result
-
-Poll the result endpoint to watch PR creation progress:
+Wait for it to complete, then create child jobs for each file you want to test:
 
 ```bash
-curl http://localhost:3000/jobs/pr-creator/pr-ghi-789/result
+# Generate tests for first file
+curl -X POST http://localhost:3000/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jobId": "analysis-job-123",
+    "targetFilePath": "src/services/user.service.ts"
+  }'
+
+# Generate tests for second file (reuses same analysis)
+curl -X POST http://localhost:3000/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jobId": "analysis-job-123",
+    "targetFilePath": "src/services/auth.service.ts"
+  }'
+
+# Generate tests for third file (reuses same analysis)
+curl -X POST http://localhost:3000/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jobId": "analysis-job-123",
+    "targetFilePath": "src/utils/helpers.ts"
+  }'
 ```
 
-Watch the `status` change from `CREATING_PR` to `PR_CREATED`, and monitor the `output` for real-time progress.
+Each child job:
+- ✅ Skips cloning (saves time)
+- ✅ Skips installation (saves time)
+- ✅ Skips coverage analysis (saves time and money)
+- ✅ Only generates tests and creates PR
 
-Response (when completed):
-```json
-{
-  "jobId": "pr-ghi-789",
-  "repositoryUrl": "https://github.com/username/repository.git",
-  "status": "PR_CREATED",
-  "parentJobId": "test-def-456",
-  "prCreationResult": {
-    "prUrl": "https://github.com/username/repository/pull/42",
-    "prNumber": 42,
-    "summary": "Created pull request with comprehensive unit tests for src/utils/helpers.ts..."
-  },
-  "error": null,
-  "output": [
-    "Creating pull request...",
-    "Using session ID: xyz-789",
-    "[Claude] ...",
-    "PR created: https://github.com/username/repository/pull/42",
-    "Pull request created successfully: https://github.com/username/repository/pull/42"
-  ]
-}
-```
+---
 
-## Advanced Features
+### Example 4: Monorepo with Entrypoint
 
-### Monorepo Support with Entrypoint
-
-For repositories where the source code is in a subdirectory:
+For a monorepo where code is in a subdirectory:
 
 ```bash
-curl -X POST http://localhost:3000/jobs/coverage-analyzer/start \
+curl -X POST http://localhost:3000/jobs \
   -H "Content-Type: application/json" \
   -d '{
     "repositoryUrl": "https://github.com/org/monorepo.git",
@@ -449,14 +429,11 @@ curl -X POST http://localhost:3000/jobs/coverage-analyzer/start \
   }'
 ```
 
-This will run `npm install` and all analysis in the `packages/backend` directory.
-
-### Session Continuity
-
-Test generation jobs capture a Claude CLI session ID, which is then reused for PR creation. This ensures:
-- Claude remembers the context of test generation
-- PR descriptions are comprehensive and accurate
-- All changes are properly documented
+This will:
+- Clone the repository
+- Change to `packages/backend` directory
+- Run `npm install` in `packages/backend`
+- Analyze coverage in `packages/backend`
 
 ## Project Structure
 

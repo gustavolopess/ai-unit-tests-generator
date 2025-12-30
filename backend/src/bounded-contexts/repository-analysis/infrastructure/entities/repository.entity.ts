@@ -18,9 +18,6 @@ export class RepositoryEntity {
   @Index()
   url: string;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
-  entrypoint?: string;
-
   @Column({ name: 'local_path', type: 'varchar', length: 500, nullable: true })
   localPath?: string;
 

@@ -15,9 +15,9 @@ export class CreateJobHandler implements ICommandHandler<CreateJobCommand> {
   ) {}
 
   async execute(command: CreateJobCommand): Promise<Job> {
-    const { repositoryId, targetFilePath, parentJobId } = command;
+    const { repositoryId, targetFilePath, parentJobId, entrypoint } = command;
 
-    const job = Job.create(repositoryId, targetFilePath, parentJobId);
+    const job = Job.create(repositoryId, targetFilePath, parentJobId, entrypoint);
 
     // If this is a child job, inherit parent's analysis results
     if (parentJobId) {

@@ -1,4 +1,4 @@
-import { FileCoverageDto } from '../coverage/dto/coverage-response.dto';
+import { FileCoverageDto } from '../bounded-contexts/job-processing/application/dto/job-response.dto';
 
 export enum JobStatus {
   PENDING = 'PENDING',

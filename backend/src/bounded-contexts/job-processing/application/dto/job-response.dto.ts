@@ -1,8 +1,21 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Job } from '../../domain/models/job.entity';
 import { JobStatus } from '../../domain/models/job-status.enum';
 
-export class JobResponseDto {
+export class FileCoverageDto {
+  @ApiProperty({
+    description: 'File path relative to repository root',
+    example: 'src/services/user.service.ts',
+  })
+  file: string;
+
+  @ApiProperty({
+    description: 'Coverage percentage for this file',
+    example: 85.5,
+  })
+  coverage: number;
+}
+
+export class JobCreatedResponseDto {
   @ApiProperty({
     description: 'Unique job identifier',
     example: '550e8400-e29b-41d4-a716-446655440000',
@@ -18,41 +31,98 @@ export class JobResponseDto {
   @ApiProperty({
     description: 'Current job status',
     enum: JobStatus,
+    example: JobStatus.PENDING,
   })
   status: JobStatus;
 
-  @ApiProperty({ description: 'Job creation timestamp' })
-  createdAt: Date;
+  @ApiProperty({
+    description: 'Human-readable message about the job',
+    example: 'Job created and processing started',
+  })
+  message: string;
+}
 
-  @ApiProperty({ description: 'Last update timestamp' })
-  updatedAt: Date;
+export class JobResultResponseDto {
+  @ApiProperty({
+    description: 'Unique job identifier',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  jobId: string;
 
-  @ApiProperty({ description: 'Job start timestamp', required: false })
-  startedAt?: Date;
+  @ApiProperty({
+    description: 'Parent job identifier (if this is a child job)',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+    required: false,
+  })
+  parentJobId?: string;
 
-  @ApiProperty({ description: 'Job completion timestamp', required: false })
-  completedAt?: Date;
+  @ApiProperty({
+    description: 'GitHub repository URL',
+    example: 'https://github.com/username/repository.git',
+  })
+  repositoryUrl: string;
 
-  @ApiProperty({ description: 'Error message if job failed', required: false })
+  @ApiProperty({
+    description: 'Current job status',
+    enum: JobStatus,
+    example: JobStatus.COMPLETED,
+  })
+  status: JobStatus;
+
+  @ApiProperty({
+    description: 'Total number of files analyzed',
+    example: 15,
+    required: false,
+  })
+  totalFiles?: number;
+
+  @ApiProperty({
+    description: 'Average coverage percentage across all files',
+    example: 67.5,
+    required: false,
+  })
+  averageCoverage?: number;
+
+  @ApiProperty({
+    description: 'Coverage details for each file',
+    type: [FileCoverageDto],
+    required: false,
+  })
+  files?: FileCoverageDto[];
+
+  @ApiProperty({
+    description: 'Test generation result',
+    required: false,
+  })
+  testGenerationResult?: {
+    filePath: string;
+    testFilePath?: string;
+    coverage?: number;
+  };
+
+  @ApiProperty({
+    description: 'PR creation result',
+    required: false,
+  })
+  prCreationResult?: {
+    prUrl: string;
+    prNumber: number;
+  };
+
+  @ApiProperty({
+    description: 'Error message if job failed',
+    required: false,
+  })
   error?: string;
 
   @ApiProperty({
     description: 'Real-time output log from job execution',
     type: [String],
+    example: [
+      'Cloning repository...',
+      'Starting Claude analysis...',
+      'Analysis completed',
+    ],
   })
   output: string[];
-
-  static fromDomain(job: Job, repositoryUrl: string, output: string[]): JobResponseDto {
-    return {
-      jobId: job.id.getValue(),
-      repositoryUrl,
-      status: job.status,
-      createdAt: job.createdAt,
-      updatedAt: job.updatedAt,
-      startedAt: job.startedAt,
-      completedAt: job.completedAt,
-      error: job.error,
-      output,
-    };
-  }
 }

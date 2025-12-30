@@ -7,7 +7,6 @@ import { CoverageAnalysisCompletedEvent } from '../events/coverage-analysis-comp
 
 export interface RepositoryProps {
   url: RepositoryUrl;
-  entrypoint?: string;
   localPath?: string;
   clonedAt?: Date;
   fileCoverages: FileCoverage[];
@@ -22,11 +21,10 @@ export class Repository extends AggregateRoot<RepositoryId> {
     this.props = props;
   }
 
-  static create(url: RepositoryUrl, entrypoint?: string): Repository {
+  static create(url: RepositoryUrl): Repository {
     const repositoryId = RepositoryId.generate();
     const repository = new Repository(repositoryId, {
       url,
-      entrypoint,
       fileCoverages: [],
     });
 
@@ -40,10 +38,6 @@ export class Repository extends AggregateRoot<RepositoryId> {
   // Getters
   get url(): RepositoryUrl {
     return this.props.url;
-  }
-
-  get entrypoint(): string | undefined {
-    return this.props.entrypoint;
   }
 
   get localPath(): string | undefined {
@@ -117,13 +111,13 @@ export class Repository extends AggregateRoot<RepositoryId> {
     );
   }
 
-  getWorkingDirectory(): string {
+  getWorkingDirectory(entrypoint?: string): string {
     if (!this.props.localPath) {
       throw new Error('Repository has not been cloned yet');
     }
 
-    return this.props.entrypoint
-      ? `${this.props.localPath}/${this.props.entrypoint}`
+    return entrypoint
+      ? `${this.props.localPath}/${entrypoint}`
       : this.props.localPath;
   }
 }

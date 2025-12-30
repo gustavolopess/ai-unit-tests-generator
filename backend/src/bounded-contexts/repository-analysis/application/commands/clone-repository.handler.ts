@@ -22,7 +22,7 @@ export class CloneRepositoryHandler
   ) {}
 
   async execute(command: CloneRepositoryCommand): Promise<Repository> {
-    const { repositoryUrl: urlString, entrypoint } = command;
+    const { repositoryUrl: urlString } = command;
 
     this.logger.log(`Cloning repository: ${urlString}`);
 
@@ -34,7 +34,7 @@ export class CloneRepositoryHandler
 
     if (!repository) {
       // Create new repository aggregate
-      repository = Repository.create(repositoryUrl, entrypoint);
+      repository = Repository.create(repositoryUrl);
     }
 
     // If already cloned, return it

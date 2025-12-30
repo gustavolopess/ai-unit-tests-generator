@@ -22,9 +22,9 @@ export class AnalyzeCoverageHandler
   ) {}
 
   async execute(command: AnalyzeCoverageCommand): Promise<Repository> {
-    const { repositoryId: idString, onOutput } = command;
+    const { repositoryId: idString, entrypoint, onOutput } = command;
 
-    this.logger.log(`Analyzing coverage for repository: ${idString}`);
+    this.logger.log(`Analyzing coverage for repository: ${idString}${entrypoint ? ` (entrypoint: ${entrypoint})` : ''}`);
 
     // Get repository
     const repositoryId = RepositoryId.create(idString);
@@ -38,8 +38,8 @@ export class AnalyzeCoverageHandler
       throw new Error('Repository must be cloned before analyzing coverage');
     }
 
-    // Get working directory
-    const workingDirectory = repository.getWorkingDirectory();
+    // Get working directory (pass entrypoint from command)
+    const workingDirectory = repository.getWorkingDirectory(entrypoint);
 
     // Analyze coverage
     const fileCoverages = await this.coverageAnalyzer.analyze(

@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Job, JobStatus, JobType } from './job.entity';
 import { randomUUID } from 'crypto';
-import { FileCoverageDto } from '../coverage/dto/coverage-response.dto';
+import { FileCoverageDto } from '../bounded-contexts/job-processing/application/dto/job-response.dto';
 
 @Injectable()
 export class JobService {

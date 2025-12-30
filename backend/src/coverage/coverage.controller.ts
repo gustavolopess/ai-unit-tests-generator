@@ -19,11 +19,12 @@ import { CreateJobDto } from './dto/create-job.dto';
 import {
   JobCreatedResponseDto,
   JobResultResponseDto,
-} from './dto/job-response.dto';
+} from '../bounded-contexts/job-processing/application/dto/job-response.dto';
 import { CreateJobCommand } from '../bounded-contexts/job-processing/application/commands';
 import { GetJobQuery, GetJobLogsQuery } from '../bounded-contexts/job-processing/application/queries';
 import { Job } from '../bounded-contexts/job-processing/domain/models/job.entity';
 import { CloneRepositoryCommand } from '../bounded-contexts/repository-analysis/application/commands';
+import { GetRepositoryQuery } from '../bounded-contexts/repository-analysis/application/queries';
 import { Repository } from '../bounded-contexts/repository-analysis/domain/models/repository.entity';
 
 @ApiTags('jobs')
@@ -70,8 +71,11 @@ export class CoverageController {
         ),
       );
 
-      // TODO: Fetch repository to get URL for response
-      repositoryUrl = dto.repositoryUrl || 'unknown'; // Temporary until we add repository query
+      // Fetch repository to get URL for response
+      const repository: Repository = await this.queryBus.execute(
+        new GetRepositoryQuery(parentJob.repositoryId),
+      );
+      repositoryUrl = repository.url.getValue();
     } else {
       // Create new job - repositoryUrl is required when jobId is not provided
       if (!dto.repositoryUrl) {
@@ -80,12 +84,17 @@ export class CoverageController {
 
       // First, ensure repository exists (clone command is idempotent)
       const repository: Repository = await this.commandBus.execute(
-        new CloneRepositoryCommand(dto.repositoryUrl, dto.entrypoint),
+        new CloneRepositoryCommand(dto.repositoryUrl),
       );
 
-      // Create job with repository ID
+      // Create job with repository ID and entrypoint
       job = await this.commandBus.execute(
-        new CreateJobCommand(repository.id.getValue(), dto.targetFilePath),
+        new CreateJobCommand(
+          repository.id.getValue(),
+          dto.targetFilePath,
+          undefined, // parentJobId
+          dto.entrypoint,
+        ),
       );
 
       repositoryUrl = dto.repositoryUrl;
@@ -131,8 +140,11 @@ export class CoverageController {
     const job: Job = await this.queryBus.execute(new GetJobQuery(jobId));
     const output: string[] = await this.queryBus.execute(new GetJobLogsQuery(jobId));
 
-    // TODO: Fetch repository to get URL - for now return placeholder
-    const repositoryUrl = 'unknown'; // Temporary until we add repository query
+    // Fetch repository to get URL
+    const repository: Repository = await this.queryBus.execute(
+      new GetRepositoryQuery(job.repositoryId),
+    );
+    const repositoryUrl = repository.url.getValue();
 
     return {
       jobId: job.id.getValue(),

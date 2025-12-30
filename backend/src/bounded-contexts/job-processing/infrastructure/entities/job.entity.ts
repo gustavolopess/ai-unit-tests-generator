@@ -30,6 +30,9 @@ export class JobEntity {
   @Column({ name: 'target_file_path', type: 'varchar', length: 500, nullable: true })
   targetFilePath?: string;
 
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  entrypoint?: string;
+
   @Column({ type: 'varchar', length: 50 })
   @Index()
   status: string;

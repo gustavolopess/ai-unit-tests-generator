@@ -68,6 +68,7 @@ export class TypeOrmJobRepository implements IJobRepository {
     entity.parentJobId = job.parentJobId;
     entity.repositoryId = job.repositoryId;
     entity.targetFilePath = job.targetFilePath;
+    entity.entrypoint = job.entrypoint;
     entity.status = job.status;
     entity.createdAt = job.createdAt;
     entity.updatedAt = job.updatedAt;
@@ -89,6 +90,7 @@ export class TypeOrmJobRepository implements IJobRepository {
     return Job.reconstitute(jobId, {
       repositoryId: entity.repositoryId,
       targetFilePath: entity.targetFilePath,
+      entrypoint: entity.entrypoint,
       parentJobId: entity.parentJobId,
       status: entity.status as JobStatus,
       createdAt: entity.createdAt,

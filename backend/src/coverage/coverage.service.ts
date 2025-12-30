@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { FileCoverageDto } from './dto/coverage-response.dto';
+import { FileCoverageDto } from '../bounded-contexts/job-processing/application/dto/job-response.dto';
 import {
   UpdateJobStatusCommand,
   AppendJobLogCommand,
@@ -157,20 +157,17 @@ export class CoverageService {
 
   private async installDependenciesStage(jobId: string): Promise<void> {
     const job: Job = await this.queryBus.execute(new GetJobQuery(jobId));
-    const repository: Repository = await this.queryBus.execute(
-      new GetRepositoryQuery(job.repositoryId),
-    );
 
     // Determine working directory based on entrypoint
-    const workDir = repository.entrypoint
-      ? `${job.repositoryPath}/${repository.entrypoint}`
+    const workDir = job.entrypoint
+      ? `${job.repositoryPath}/${job.entrypoint}`
       : job.repositoryPath!;
 
-    if (repository.entrypoint) {
+    if (job.entrypoint) {
       await this.commandBus.execute(
         new AppendJobLogCommand(
           jobId,
-          `Using entrypoint directory: ${repository.entrypoint}`,
+          `Using entrypoint directory: ${job.entrypoint}`,
         ),
       );
     }
@@ -213,6 +210,7 @@ export class CoverageService {
     const analyzedRepository: Repository = await this.commandBus.execute(
       new AnalyzeCoverageCommand(
         repository.id.getValue(),
+        job.entrypoint, // Pass entrypoint from job
         async (output: string) => {
           await this.commandBus.execute(
             new AppendJobLogCommand(jobId, output),
@@ -263,8 +261,8 @@ export class CoverageService {
       );
     }
 
-    const workDir = repository.entrypoint
-      ? `${job.repositoryPath}/${repository.entrypoint}`
+    const workDir = job.entrypoint
+      ? `${job.repositoryPath}/${job.entrypoint}`
       : job.repositoryPath!;
 
     await this.commandBus.execute(
