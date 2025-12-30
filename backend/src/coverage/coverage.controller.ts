@@ -150,6 +150,13 @@ export class CoverageController {
     );
     const repositoryUrl = repository.url.getValue();
 
+    // Add needsImprovement flag to files (default threshold: 80%)
+    const coverageThreshold = 80;
+    const files = job.coverageResult?.files?.map(file => ({
+      ...file,
+      needsImprovement: file.coverage < coverageThreshold,
+    }));
+
     return {
       jobId: job.id.getValue(),
       parentJobId: job.parentJobId,
@@ -159,7 +166,7 @@ export class CoverageController {
       entrypoint: job.entrypoint,
       totalFiles: job.coverageResult?.totalFiles,
       averageCoverage: job.coverageResult?.averageCoverage,
-      files: job.coverageResult?.files,
+      files,
       testGenerationResult: job.testGenerationResult,
       prCreationResult: job.prCreationResult,
       error: job.error,
