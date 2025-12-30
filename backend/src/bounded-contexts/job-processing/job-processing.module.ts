@@ -4,6 +4,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { TypeOrmJobRepository } from './infrastructure/typeorm-job.repository';
 import { JobEntity } from './infrastructure/entities/job.entity';
 import { JOB_REPOSITORY } from './domain/repositories/job.repository.interface';
+import { RepositoryAnalysisModule } from '../repository-analysis/repository-analysis.module';
+import { TestGenerationModule } from '../test-generation/test-generation.module';
 
 // Command Handlers
 import {
@@ -16,7 +18,17 @@ import {
   SetCoverageResultHandler,
   SetTestGenerationDataHandler,
   SetPRResultHandler,
+  SetRepositoryPathForJobHandler,
+  InstallDependenciesHandler,
+  AnalyzeCoverageForJobHandler,
+  GenerateTestsForJobHandler,
+  CreatePRForJobHandler,
+  CompleteJobHandler,
+  FailJobHandler,
 } from './application/commands';
+
+// Sagas
+import { JobProcessingSaga } from './application/sagas/job-processing.saga';
 
 // Query Handlers
 import {
@@ -39,12 +51,26 @@ const CommandHandlers = [
   SetCoverageResultHandler,
   SetTestGenerationDataHandler,
   SetPRResultHandler,
+  SetRepositoryPathForJobHandler,
+  InstallDependenciesHandler,
+  AnalyzeCoverageForJobHandler,
+  GenerateTestsForJobHandler,
+  CreatePRForJobHandler,
+  CompleteJobHandler,
+  FailJobHandler,
 ];
+
+const Sagas = [JobProcessingSaga];
 
 const QueryHandlers = [GetJobHandler, GetAllJobsHandler, GetChildJobsHandler, GetJobLogsHandler];
 
 @Module({
-  imports: [CqrsModule, TypeOrmModule.forFeature([JobEntity])],
+  imports: [
+    CqrsModule,
+    TypeOrmModule.forFeature([JobEntity]),
+    RepositoryAnalysisModule,
+    TestGenerationModule,
+  ],
   providers: [
     {
       provide: JOB_REPOSITORY,
@@ -53,6 +79,7 @@ const QueryHandlers = [GetJobHandler, GetAllJobsHandler, GetChildJobsHandler, Ge
     JobLogService,
     ...CommandHandlers,
     ...QueryHandlers,
+    ...Sagas,
   ],
   exports: [JOB_REPOSITORY, CqrsModule, JobLogService],
 })

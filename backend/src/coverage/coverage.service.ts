@@ -27,6 +27,18 @@ import { TestGenerationRequest } from '../bounded-contexts/test-generation/domai
 
 const execAsync = promisify(exec);
 
+/**
+ * @deprecated This service is deprecated as of the Saga pattern refactoring.
+ *
+ * The job processing workflow is now handled by the JobProcessingSaga in the
+ * job-processing bounded context. The saga orchestrates the workflow through
+ * domain events and commands, following DDD best practices.
+ *
+ * See: backend/src/bounded-contexts/job-processing/application/sagas/job-processing.saga.ts
+ *
+ * This file is kept for reference but should not be used in new code.
+ * It will be removed in a future cleanup.
+ */
 @Injectable()
 export class CoverageService {
   private readonly logger = new Logger(CoverageService.name);
@@ -39,7 +51,8 @@ export class CoverageService {
   ) {}
 
   /**
-   * Main orchestration method that processes all job stages intelligently
+   * @deprecated Use the JobProcessingSaga instead. Jobs are now processed automatically
+   * through event-driven workflow after JobCreatedEvent is published.
    */
   async processJobStages(jobId: string): Promise<void> {
     try {

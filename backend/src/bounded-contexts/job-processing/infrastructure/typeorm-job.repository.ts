@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { EventBus } from '@nestjs/cqrs';
 import { IJobRepository } from '../domain/repositories/job.repository.interface';
 import { Job } from '../domain/models/job.entity';
 import { JobId } from '../domain/models/job-id.value-object';
@@ -14,12 +15,21 @@ export class TypeOrmJobRepository implements IJobRepository {
   constructor(
     @InjectRepository(JobEntity)
     private readonly repository: Repository<JobEntity>,
+    private readonly eventBus: EventBus,
   ) {}
 
   async save(job: Job): Promise<void> {
     const entity = this.toEntity(job);
     await this.repository.save(entity);
     this.logger.log(`Job saved: ${job.id.getValue()}`);
+
+    // Publish all domain events
+    const events = job.domainEvents;
+    events.forEach(event => {
+      this.logger.log(`Publishing event: ${event.constructor.name} for job ${job.id.getValue()}`);
+      this.eventBus.publish(event);
+    });
+    job.clearEvents();
   }
 
   async findById(id: JobId | string): Promise<Job | null> {

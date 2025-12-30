@@ -14,7 +14,6 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
-import { CoverageService } from './coverage.service';
 import { CreateJobDto } from '../bounded-contexts/job-processing/application/dto/create-job.dto';
 import {
   JobCreatedResponseDto,
@@ -31,7 +30,6 @@ import { Repository } from '../bounded-contexts/repository-analysis/domain/model
 @Controller('jobs')
 export class CoverageController {
   constructor(
-    private readonly coverageService: CoverageService,
     private readonly commandBus: CommandBus,
     private readonly queryBus: QueryBus,
   ) { }
@@ -102,10 +100,8 @@ export class CoverageController {
       repositoryUrl = dto.repositoryUrl;
     }
 
-    // Start async processing
-    this.coverageService.processJobStages(job.id.getValue()).catch((error) => {
-      console.error(`Unhandled error in job ${job.id.getValue()}:`, error);
-    });
+    // The saga will automatically handle the workflow after JobCreatedEvent is published
+    // No need to manually call processJobStages anymore
 
     return {
       jobId: job.id.getValue(),
