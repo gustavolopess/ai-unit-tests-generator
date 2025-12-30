@@ -114,6 +114,7 @@ export class CoverageController {
       message: dto.jobId
         ? `Created child job ${job.id.getValue()} for test generation (reusing analysis from ${dto.jobId})`
         : `Job created${dto.targetFilePath ? ' for test generation and PR creation' : ' for coverage analysis'}`,
+      targetFilePath: job.targetFilePath,
       entrypoint: job.entrypoint,
     };
   }
@@ -154,6 +155,7 @@ export class CoverageController {
       parentJobId: job.parentJobId,
       repositoryUrl,
       status: job.status,
+      targetFilePath: job.targetFilePath,
       entrypoint: job.entrypoint,
       totalFiles: job.coverageResult?.totalFiles,
       averageCoverage: job.coverageResult?.averageCoverage,

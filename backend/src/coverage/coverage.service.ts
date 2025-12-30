@@ -30,6 +30,7 @@ const execAsync = promisify(exec);
 @Injectable()
 export class CoverageService {
   private readonly logger = new Logger(CoverageService.name);
+  private readonly coverageThreshold: number = 80; // Default threshold for needsImprovement flag
 
   constructor(
     private readonly commandBus: CommandBus,
@@ -231,6 +232,7 @@ export class CoverageService {
       (fc) => ({
         file: fc.filePath,
         coverage: fc.coveragePercentage,
+        needsImprovement: fc.coveragePercentage < this.coverageThreshold,
       }),
     );
 

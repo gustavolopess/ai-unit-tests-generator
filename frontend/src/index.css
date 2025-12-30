@@ -244,3 +244,140 @@ input {
     padding: 0.4em 0.8em;
   }
 }
+
+/* Shimmer Effect */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer-effect {
+  background: linear-gradient(90deg,
+      rgba(255, 255, 255, 0.1) 25%,
+      rgba(255, 255, 255, 0.3) 50%,
+      rgba(255, 255, 255, 0.1) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite linear;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Ensure text remains visible and readable on top of shimmer */
+.shimmer-effect>* {
+  position: relative;
+  z-index: 1;
+}
+
+/* Adjustments for specific elements if needed */
+.badge.shimmer-active {
+  background: linear-gradient(90deg,
+      var(--badge-color) 0%,
+      #ffffff55 50%,
+      var(--badge-color) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite linear;
+}
+
+/* We need to define the --badge-color for each status if we use the specific badge shimmer */
+.badge.pending {
+  --badge-color: #d97706;
+}
+
+.badge.processing {
+  --badge-color: #2563eb;
+}
+
+.badge.cloning {
+  --badge-color: #2563eb;
+}
+
+.badge.analyzing {
+  --badge-color: #2563eb;
+}
+
+.badge.installing {
+  --badge-color: #2563eb;
+}
+
+.badge.generating_tests {
+  --badge-color: #8b5cf6;
+}
+
+/* Violet for Test Gen */
+.badge.creating_pr {
+  --badge-color: #8b5cf6;
+}
+
+.badge.analysis_completed {
+  --badge-color: #059669;
+}
+
+.badge.test_generation_completed {
+  --badge-color: #059669;
+}
+
+.badge.pr_creation_completed {
+  --badge-color: #059669;
+}
+
+/* completed and failed usually don't shim, but if they did: */
+.badge.completed {
+  --badge-color: #059669;
+}
+
+.badge.failed {
+  --badge-color: #dc2626;
+}
+
+/* Also define background colors for these new classes so they appear even without shimmer */
+.badge.generating_tests,
+.badge.creating_pr {
+  background: #8b5cf6;
+  color: white;
+}
+
+.badge.analysis_completed,
+.badge.test_generation_completed,
+.badge.pr_creation_completed {
+  background: #059669;
+  color: white;
+}
+
+/* For buttons, we might want a subtle overlay instead of replacing background */
+button.shimmer-active {
+  background: linear-gradient(90deg,
+      #646cff 0%,
+      #8e94ff 50%,
+      #646cff 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite linear;
+  color: white;
+  opacity: 1 !important;
+  /* Override opacity from dashboard */
+  cursor: wait;
+}
+
+.shimmer-text {
+  background: linear-gradient(90deg,
+      #ffffff 0%,
+      #646cff 50%,
+      #ffffff 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 1.5s infinite linear;
+}
+
+.badge.success {
+  color: #059669;
+}
+
+.badge.failure {
+  color: #dc2626;
+}

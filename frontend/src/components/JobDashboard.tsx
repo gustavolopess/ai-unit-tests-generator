@@ -4,20 +4,28 @@ import axios from 'axios';
 interface FileCoverage {
     file: string;
     coverage: number;
+    needsImprovement: boolean;
 }
 
 interface JobResult {
     jobId: string;
     parentJobId?: string;
-    status: 'pending' | 'cloning' | 'installing' | 'analyzing' | 'completed' | 'failed';
+    status: 'pending' | 'cloning' | 'installing' | 'analyzing' | 'analysis_completed' | 'generating_tests' | 'test_generation_completed' | 'creating_pr' | 'pr_creation_completed' | 'completed' | 'failed';
     repositoryUrl: string;
+    targetFilePath?: string;
     entrypoint?: string;
     totalFiles?: number;
     averageCoverage?: number;
     files?: FileCoverage[];
     output: string[];
+    testGenerationResult?: {
+        filePath: string;
+        testFilePath?: string;
+        coverage?: number;
+    };
     prCreationResult?: {
         prUrl: string;
+        prNumber: number;
     };
     error?: string;
 }
@@ -28,21 +36,41 @@ interface JobDashboardProps {
     onSwitchJob: (jobId: string) => void;
 }
 
+const isJobInFinalStatus = (job: JobResult | null) => {
+    return job?.status.toLowerCase() === 'completed' || job?.status.toLowerCase() === 'failed';
+}
+
+const isJobSuccess = (job: JobResult | null) => {
+    return job?.status.toLowerCase() === 'completed';
+}
+
 export const JobDashboard: React.FC<JobDashboardProps> = ({ jobId, onBack, onSwitchJob }) => {
     const [job, setJob] = useState<JobResult | null>(null);
+    const [generatingFile, setGeneratingFile] = useState<string | null>(null);
     const logsEndRef = useRef<HTMLDivElement>(null);
+
+    console.log(job?.status, isJobInFinalStatus(job))
 
     const pollJob = async () => {
         try {
             const response = await axios.get(`http://localhost:3000/jobs/${jobId}`);
             setJob(response.data);
+            if (!isJobInFinalStatus(response.data)) {
+                setGeneratingFile(response.data.targetFilePath);
+            } else {
+                setGeneratingFile(null);
+            }
         } catch (err) {
             console.error('Error fetching job:', err);
         }
     };
 
+    console.log('GENERATING FILE', generatingFile);
+
     const handleGenerateTests = async (file: string) => {
         if (!job) return;
+        console.log('GENERATING FILE 3', file);
+        setGeneratingFile(file);
         try {
             // If this is a child job (test generation), we want to use the PARENT job ID
             // to base the new test generation on the original analysis.
@@ -58,13 +86,19 @@ export const JobDashboard: React.FC<JobDashboardProps> = ({ jobId, onBack, onSwi
         } catch (err) {
             console.error('Error starting test generation:', err);
             alert('Failed to start test generation');
+            setGeneratingFile(null);
         }
     };
 
     useEffect(() => {
         pollJob();
         const interval = setInterval(pollJob, 2000);
-        return () => clearInterval(interval);
+        return () => {
+            clearInterval(interval);
+            // Reset generating file state when component unmounts or jobId changes
+            console.log('RESET GENERATING FILE');
+            setGeneratingFile(null);
+        };
     }, [jobId]);
 
     useEffect(() => {
@@ -83,7 +117,9 @@ export const JobDashboard: React.FC<JobDashboardProps> = ({ jobId, onBack, onSwi
                         ← Back
                     </button>
                     <h2>Job Analysis</h2>
-                    <span className={`badge ${job.status}`}>{job.status.toUpperCase()}</span>
+                    <span className={`badge ${job.status} ${!isJobInFinalStatus(job) ? 'shimmer-text' : ''} ${isJobSuccess(job) ? 'success' : 'failure'}`}>
+                        {job.status.toUpperCase()}
+                    </span>
                 </div>
 
                 <p className="repo-info"><strong>Repository:</strong> {job.repositoryUrl}</p>
@@ -148,7 +184,7 @@ export const JobDashboard: React.FC<JobDashboardProps> = ({ jobId, onBack, onSwi
                                             className="progress-fill"
                                             style={{
                                                 width: `${file.coverage}%`,
-                                                backgroundColor: file.coverage >= 80 ? '#059669' :
+                                                backgroundColor: !file.needsImprovement ? '#059669' :
                                                     file.coverage >= 50 ? '#d97706' : '#dc2626'
                                             }}
                                         />
@@ -156,10 +192,19 @@ export const JobDashboard: React.FC<JobDashboardProps> = ({ jobId, onBack, onSwi
                                 </div>
                                 <button
                                     onClick={() => handleGenerateTests(file.file)}
-                                    style={{ marginLeft: '1rem', padding: '0.4em 0.8em', fontSize: '0.8em' }}
+                                    disabled={generatingFile !== null}
+                                    className={generatingFile === file.file ? 'shimmer-active' : ''}
+                                    style={{
+                                        marginLeft: '1rem',
+                                        padding: '0.4em 0.8em',
+                                        fontSize: '0.8em',
+                                        opacity: generatingFile !== null ? (generatingFile === file.file ? 1 : 0.6) : 1,
+                                        cursor: generatingFile !== null ? 'not-allowed' : 'pointer',
+                                        border: 'none'
+                                    }}
                                     title="Generate tests for this file"
                                 >
-                                    ⚡ Generate Tests
+                                    {generatingFile === file.file ? 'Generating...' : '⚡ Generate Tests'}
                                 </button>
                             </div>
                         ))}

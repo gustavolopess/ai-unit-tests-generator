@@ -13,6 +13,12 @@ export class FileCoverageDto {
     example: 85.5,
   })
   coverage: number;
+
+  @ApiProperty({
+    description: 'Indicates if the file coverage is below the target threshold (default 80%)',
+    example: false,
+  })
+  needsImprovement: boolean;
 }
 
 export class JobCreatedResponseDto {
@@ -40,6 +46,13 @@ export class JobCreatedResponseDto {
     example: 'Job created and processing started',
   })
   message: string;
+
+  @ApiProperty({
+    description: 'Target file path for test generation',
+    example: 'src/services/user.service.ts',
+    required: false,
+  })
+  targetFilePath?: string;
 
   @ApiProperty({
     description: 'Entrypoint subdirectory for monorepos',
@@ -75,6 +88,13 @@ export class JobResultResponseDto {
     example: JobStatus.COMPLETED,
   })
   status: JobStatus;
+
+  @ApiProperty({
+    description: 'Target file path for test generation',
+    example: 'src/services/user.service.ts',
+    required: false,
+  })
+  targetFilePath?: string;
 
   @ApiProperty({
     description: 'Entrypoint subdirectory for monorepos',

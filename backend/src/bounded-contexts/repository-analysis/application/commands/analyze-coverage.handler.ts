@@ -7,6 +7,8 @@ import type { IRepositoryRepository } from '../../domain/repositories/repository
 import { REPOSITORY_REPOSITORY } from '../../domain/repositories/repository.repository.interface';
 import type { ICoverageAnalyzer } from '../../domain/services/coverage-analyzer.interface';
 import { COVERAGE_ANALYZER } from '../../domain/services/coverage-analyzer.interface';
+import type { IGitService } from '../../domain/services/git-service.interface';
+import { GIT_SERVICE } from '../../domain/services/git-service.interface';
 
 @CommandHandler(AnalyzeCoverageCommand)
 export class AnalyzeCoverageHandler
@@ -19,6 +21,8 @@ export class AnalyzeCoverageHandler
     private readonly repositoryRepository: IRepositoryRepository,
     @Inject(COVERAGE_ANALYZER)
     private readonly coverageAnalyzer: ICoverageAnalyzer,
+    @Inject(GIT_SERVICE)
+    private readonly gitService: IGitService,
   ) {}
 
   async execute(command: AnalyzeCoverageCommand): Promise<Repository> {
@@ -37,6 +41,9 @@ export class AnalyzeCoverageHandler
     if (!repository.isCloned()) {
       throw new Error('Repository must be cloned before analyzing coverage');
     }
+
+    // Ensure we're on main/master branch and pull latest changes
+    await this.gitService.ensureMainBranchAndUpdate(repository.localPath!);
 
     // Get working directory (pass entrypoint from command)
     const workingDirectory = repository.getWorkingDirectory(entrypoint);

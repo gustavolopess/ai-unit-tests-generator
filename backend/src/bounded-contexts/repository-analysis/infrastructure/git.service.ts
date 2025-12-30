@@ -36,4 +36,34 @@ export class GitService implements IGitService {
     //   this.logger.error(`Failed to cleanup directory ${dirPath}: ${error.message}`);
     // }
   }
+
+  async ensureMainBranchAndUpdate(repositoryPath: string): Promise<void> {
+    try {
+      this.logger.log(`Ensuring repository is on main/master branch at ${repositoryPath}`);
+
+      // First, fetch latest changes from remote
+      await execAsync('git fetch origin', { cwd: repositoryPath });
+
+      // Try to checkout main branch, if it doesn't exist try master
+      try {
+        await execAsync('git checkout main', { cwd: repositoryPath });
+        this.logger.log(`Checked out main branch`);
+
+        // Pull latest changes
+        await execAsync('git pull origin main', { cwd: repositoryPath });
+        this.logger.log(`Pulled latest changes from main branch`);
+      } catch (error) {
+        // If main doesn't exist, try master
+        this.logger.log(`Main branch not found, trying master branch`);
+        await execAsync('git checkout master', { cwd: repositoryPath });
+        this.logger.log(`Checked out master branch`);
+
+        // Pull latest changes
+        await execAsync('git pull origin master', { cwd: repositoryPath });
+        this.logger.log(`Pulled latest changes from master branch`);
+      }
+    } catch (error) {
+      throw new Error(`Failed to ensure main/master branch and update: ${error.message}`);
+    }
+  }
 }
