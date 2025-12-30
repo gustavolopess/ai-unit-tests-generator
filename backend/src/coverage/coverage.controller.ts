@@ -15,7 +15,7 @@ import {
 } from '@nestjs/swagger';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { CoverageService } from './coverage.service';
-import { CreateJobDto } from './dto/create-job.dto';
+import { CreateJobDto } from '../bounded-contexts/job-processing/application/dto/create-job.dto';
 import {
   JobCreatedResponseDto,
   JobResultResponseDto,
@@ -34,7 +34,7 @@ export class CoverageController {
     private readonly coverageService: CoverageService,
     private readonly commandBus: CommandBus,
     private readonly queryBus: QueryBus,
-  ) {}
+  ) { }
 
   @Post()
   @HttpCode(HttpStatus.ACCEPTED)
@@ -63,11 +63,13 @@ export class CoverageController {
       const parentJob = await this.queryBus.execute(new GetJobQuery(dto.jobId));
 
       // Create a new child job that references the parent's repository
+      // Use entrypoint from DTO if provided, otherwise inherit from parent job
       job = await this.commandBus.execute(
         new CreateJobCommand(
           parentJob.repositoryId,
           dto.targetFilePath,
           dto.jobId, // parentJobId
+          dto.entrypoint ?? parentJob.entrypoint,
         ),
       );
 
@@ -112,6 +114,7 @@ export class CoverageController {
       message: dto.jobId
         ? `Created child job ${job.id.getValue()} for test generation (reusing analysis from ${dto.jobId})`
         : `Job created${dto.targetFilePath ? ' for test generation and PR creation' : ' for coverage analysis'}`,
+      entrypoint: job.entrypoint,
     };
   }
 
@@ -151,6 +154,7 @@ export class CoverageController {
       parentJobId: job.parentJobId,
       repositoryUrl,
       status: job.status,
+      entrypoint: job.entrypoint,
       totalFiles: job.coverageResult?.totalFiles,
       averageCoverage: job.coverageResult?.averageCoverage,
       files: job.coverageResult?.files,

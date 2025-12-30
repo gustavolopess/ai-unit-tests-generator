@@ -11,6 +11,7 @@ interface JobResult {
     parentJobId?: string;
     status: 'pending' | 'cloning' | 'installing' | 'analyzing' | 'completed' | 'failed';
     repositoryUrl: string;
+    entrypoint?: string;
     totalFiles?: number;
     averageCoverage?: number;
     files?: FileCoverage[];
@@ -51,6 +52,7 @@ export const JobDashboard: React.FC<JobDashboardProps> = ({ jobId, onBack, onSwi
             const response = await axios.post('http://localhost:3000/jobs', {
                 jobId: baseJobId,
                 targetFilePath: file,
+                entrypoint: job.entrypoint,
             });
             onSwitchJob(response.data.jobId);
         } catch (err) {

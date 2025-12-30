@@ -15,7 +15,7 @@ export class FileCoverageEntity {
   @PrimaryColumn('varchar', { length: 36 })
   id: string;
 
-  @Column({ name: 'repository_id', type: 'varchar', length: 36 })
+  @Column({ name: 'repository_id', type: 'varchar', length: 36, nullable: true })
   @Index()
   repositoryId: string;
 

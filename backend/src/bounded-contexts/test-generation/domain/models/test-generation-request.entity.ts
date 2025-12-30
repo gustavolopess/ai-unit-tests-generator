@@ -185,8 +185,8 @@ export class TestGenerationRequest extends AggregateRoot<TestGenerationId> {
   canCreatePullRequest(): boolean {
     return (
       this.props.status === TestGenerationStatus.COMPLETED &&
-      this.props.sessionId !== undefined &&
-      this.props.pullRequest === undefined
+      this.props.sessionId != null &&
+      this.props.pullRequest == null
     );
   }
 }

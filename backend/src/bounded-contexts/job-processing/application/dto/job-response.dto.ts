@@ -40,6 +40,13 @@ export class JobCreatedResponseDto {
     example: 'Job created and processing started',
   })
   message: string;
+
+  @ApiProperty({
+    description: 'Entrypoint subdirectory for monorepos',
+    example: 'packages/api',
+    required: false,
+  })
+  entrypoint?: string;
 }
 
 export class JobResultResponseDto {
@@ -68,6 +75,13 @@ export class JobResultResponseDto {
     example: JobStatus.COMPLETED,
   })
   status: JobStatus;
+
+  @ApiProperty({
+    description: 'Entrypoint subdirectory for monorepos',
+    example: 'packages/api',
+    required: false,
+  })
+  entrypoint?: string;
 
   @ApiProperty({
     description: 'Total number of files analyzed',
