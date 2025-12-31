@@ -2,6 +2,10 @@
 
 A full-stack application that automatically improves TypeScript test coverage in GitHub repositories using AI.
 
+## Demo
+Check the demo video [here](https://drive.google.com/file/d/1e39QPXfN-116geLo9nhKqtTmp-IDjjHh/view?usp=sharing).
+
+
 ## 📚 Documentation Links
 
 For reference about how to setup and quickstart this project, follow these docs:
