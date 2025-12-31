@@ -1,4 +1,4 @@
-import { ValueObject } from '../../../../shared/kernel/value-object.base';
+import { ValueObject } from '@/shared/kernel/value-object.base';
 import { randomUUID } from 'crypto';
 
 export class TestGenerationId extends ValueObject {

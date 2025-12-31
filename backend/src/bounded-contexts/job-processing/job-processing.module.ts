@@ -4,8 +4,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { TypeOrmJobRepository } from './infrastructure/typeorm-job.repository';
 import { JobEntity } from './infrastructure/entities/job.entity';
 import { JOB_REPOSITORY } from './domain/repositories/job.repository.interface';
-import { RepositoryAnalysisModule } from '../repository-analysis/repository-analysis.module';
-import { TestGenerationModule } from '../test-generation/test-generation.module';
+import { NPM_SERVICE } from './domain/services/npm-service.interface';
+import { GitRepoAnalysisModule } from '@/bounded-contexts/git-repo-analysis/git-repo-analysis.module';
+import { TestGenerationModule } from '@/bounded-contexts/test-generation/test-generation.module';
+import { NpmService } from './infrastructure/npm.service';
 
 // Command Handlers
 import {
@@ -62,19 +64,28 @@ const CommandHandlers = [
 
 const Sagas = [JobProcessingSaga];
 
-const QueryHandlers = [GetJobHandler, GetAllJobsHandler, GetChildJobsHandler, GetJobLogsHandler];
+const QueryHandlers = [
+  GetJobHandler,
+  GetAllJobsHandler,
+  GetChildJobsHandler,
+  GetJobLogsHandler,
+];
 
 @Module({
   imports: [
     CqrsModule,
     TypeOrmModule.forFeature([JobEntity]),
-    RepositoryAnalysisModule,
+    GitRepoAnalysisModule,
     TestGenerationModule,
   ],
   providers: [
     {
       provide: JOB_REPOSITORY,
       useClass: TypeOrmJobRepository,
+    },
+    {
+      provide: NPM_SERVICE,
+      useClass: NpmService,
     },
     JobLogService,
     ...CommandHandlers,

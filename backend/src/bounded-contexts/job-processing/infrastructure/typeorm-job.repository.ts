@@ -2,11 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EventBus } from '@nestjs/cqrs';
-import { IJobRepository } from '../domain/repositories/job.repository.interface';
-import { Job } from '../domain/models/job.entity';
-import { JobId } from '../domain/models/job-id.value-object';
+import { IJobRepository } from '@/bounded-contexts/job-processing/domain/repositories/job.repository.interface';
+import { Job } from '@/bounded-contexts/job-processing/domain/models/job.entity';
+import { JobId } from '@/bounded-contexts/job-processing/domain/models/job-id.value-object';
 import { JobEntity } from './entities/job.entity';
-import { JobStatus } from '../domain/models/job-status.enum';
+import { JobStatus } from '@/bounded-contexts/job-processing/domain/models/job-status.enum';
 
 @Injectable()
 export class TypeOrmJobRepository implements IJobRepository {
@@ -25,8 +25,10 @@ export class TypeOrmJobRepository implements IJobRepository {
 
     // Publish all domain events
     const events = job.domainEvents;
-    events.forEach(event => {
-      this.logger.log(`Publishing event: ${event.constructor.name} for job ${job.id.getValue()}`);
+    events.forEach((event) => {
+      this.logger.log(
+        `Publishing event: ${event.constructor.name} for job ${job.id.getValue()}`,
+      );
       this.eventBus.publish(event);
     });
     job.clearEvents();
@@ -58,7 +60,9 @@ export class TypeOrmJobRepository implements IJobRepository {
       where: { parentJobId },
       order: { createdAt: 'DESC' },
     });
-    this.logger.log(`Found ${entities.length} child jobs for parent ${parentJobId}`);
+    this.logger.log(
+      `Found ${entities.length} child jobs for parent ${parentJobId}`,
+    );
     return entities.map((entity) => this.toDomain(entity));
   }
 

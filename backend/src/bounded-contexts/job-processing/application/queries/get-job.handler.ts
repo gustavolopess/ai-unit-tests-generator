@@ -1,10 +1,10 @@
 import { QueryHandler, IQueryHandler } from '@nestjs/cqrs';
 import { Inject, NotFoundException } from '@nestjs/common';
 import { GetJobQuery } from './get-job.query';
-import { Job } from '../../domain/models/job.entity';
-import { JobId } from '../../domain/models/job-id.value-object';
-import type { IJobRepository } from '../../domain/repositories/job.repository.interface';
-import { JOB_REPOSITORY } from '../../domain/repositories/job.repository.interface';
+import { Job } from '@/bounded-contexts/job-processing/domain/models/job.entity';
+import { JobId } from '@/bounded-contexts/job-processing/domain/models/job-id.value-object';
+import type { IJobRepository } from '@/bounded-contexts/job-processing/domain/repositories/job.repository.interface';
+import { JOB_REPOSITORY } from '@/bounded-contexts/job-processing/domain/repositories/job.repository.interface';
 
 @QueryHandler(GetJobQuery)
 export class GetJobHandler implements IQueryHandler<GetJobQuery> {

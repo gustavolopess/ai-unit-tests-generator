@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { promises as fs } from 'fs';
 import { join } from 'path';
+import { AppConfig } from '@/shared/config/app.config';
 
 @Injectable()
 export class JobLogService {
@@ -8,8 +9,7 @@ export class JobLogService {
   private readonly logsDir: string;
 
   constructor() {
-    // Store logs in data/logs directory
-    this.logsDir = process.env.LOGS_DIR || join(process.cwd(), 'data', 'logs');
+    this.logsDir = AppConfig.jobs.logsDir;
     this.ensureLogsDirExists();
   }
 
@@ -39,7 +39,9 @@ export class JobLogService {
     try {
       await fs.appendFile(logPath, logLine, 'utf-8');
     } catch (error) {
-      this.logger.error(`Failed to write to log file ${logPath}: ${error.message}`);
+      this.logger.error(
+        `Failed to write to log file ${logPath}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -93,7 +95,9 @@ export class JobLogService {
       this.logger.log(`Deleted log file: ${logPath}`);
     } catch (error) {
       if (error.code !== 'ENOENT') {
-        this.logger.error(`Failed to delete log file ${logPath}: ${error.message}`);
+        this.logger.error(
+          `Failed to delete log file ${logPath}: ${error.message}`,
+        );
       }
     }
   }

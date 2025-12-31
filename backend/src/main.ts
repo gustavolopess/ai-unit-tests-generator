@@ -2,10 +2,16 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { AppConfig } from './shared/config/app.config';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.enableCors();
+
+  app.enableCors({
+    origin: AppConfig.server.allowedOrigins,
+    credentials: true,
+  });
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -21,11 +27,14 @@ async function bootstrap() {
       'API for analyzing test coverage of TypeScript GitHub repositories and automatically generating tests using Claude CLI',
     )
     .setVersion('1.0')
-    .addTag('jobs', 'Job management endpoints for coverage analysis, test generation, and PR creation')
+    .addTag(
+      'jobs',
+      'Job management endpoints for coverage analysis, test generation, and PR creation',
+    )
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
 
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(AppConfig.server.port);
 }
 bootstrap();

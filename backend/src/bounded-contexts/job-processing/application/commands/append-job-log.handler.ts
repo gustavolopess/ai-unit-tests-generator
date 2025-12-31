@@ -1,15 +1,13 @@
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 import { Logger, Inject } from '@nestjs/common';
 import { AppendJobLogCommand } from './append-job-log.command';
-import { JobLogService } from '../../infrastructure/job-log.service';
-import type { IJobRepository } from '../../domain/repositories/job.repository.interface';
-import { JOB_REPOSITORY } from '../../domain/repositories/job.repository.interface';
-import { JobId } from '../../domain/models/job-id.value-object';
+import { JobLogService } from '@/bounded-contexts/job-processing/infrastructure/job-log.service';
+import type { IJobRepository } from '@/bounded-contexts/job-processing/domain/repositories/job.repository.interface';
+import { JOB_REPOSITORY } from '@/bounded-contexts/job-processing/domain/repositories/job.repository.interface';
+import { JobId } from '@/bounded-contexts/job-processing/domain/models/job-id.value-object';
 
 @CommandHandler(AppendJobLogCommand)
-export class AppendJobLogHandler
-  implements ICommandHandler<AppendJobLogCommand>
-{
+export class AppendJobLogHandler implements ICommandHandler<AppendJobLogCommand> {
   private readonly logger = new Logger(AppendJobLogHandler.name);
 
   constructor(

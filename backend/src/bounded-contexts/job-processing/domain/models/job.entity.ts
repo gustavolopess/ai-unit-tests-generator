@@ -1,10 +1,10 @@
-import { AggregateRoot } from '../../../../shared/kernel/entity.base';
+import { AggregateRoot } from '@/shared/kernel/entity.base';
 import { JobId } from './job-id.value-object';
 import { JobStatus } from './job-status.enum';
-import { JobCreatedEvent } from '../events/job-created.event';
-import { JobStatusChangedEvent } from '../events/job-status-changed.event';
-import { JobCompletedEvent } from '../events/job-completed.event';
-import { JobFailedEvent } from '../events/job-failed.event';
+import { JobCreatedEvent } from '@/bounded-contexts/job-processing/domain/events/job-created.event';
+import { JobStatusChangedEvent } from '@/bounded-contexts/job-processing/domain/events/job-status-changed.event';
+import { JobCompletedEvent } from '@/bounded-contexts/job-processing/domain/events/job-completed.event';
+import { JobFailedEvent } from '@/bounded-contexts/job-processing/domain/events/job-failed.event';
 
 export interface JobProps {
   repositoryId: string; // FK to repositories table
@@ -145,10 +145,7 @@ export class Job extends AggregateRoot<JobId> {
     this.props.status = newStatus;
     this.props.updatedAt = new Date();
 
-    if (
-      newStatus === JobStatus.CLONING &&
-      !this.props.startedAt
-    ) {
+    if (newStatus === JobStatus.CLONING && !this.props.startedAt) {
       this.props.startedAt = new Date();
     }
 
@@ -255,8 +252,10 @@ export class Job extends AggregateRoot<JobId> {
   needsDependencyInstallation(): boolean {
     // We assume if repository is cloned, we need to check if dependencies are installed
     // This is a simplification - in production, you might check for node_modules existence
-    return this.props.repositoryPath !== undefined &&
-           this.props.status === JobStatus.CLONING;
+    return (
+      this.props.repositoryPath !== undefined &&
+      this.props.status === JobStatus.CLONING
+    );
   }
 
   needsCoverageAnalysis(): boolean {
@@ -264,23 +263,29 @@ export class Job extends AggregateRoot<JobId> {
   }
 
   needsTestGeneration(): boolean {
-    return this.props.targetFilePath != null &&
-           this.props.testGenerationResult == null;
+    return (
+      this.props.targetFilePath != null &&
+      this.props.testGenerationResult == null
+    );
   }
 
   needsPRCreation(): boolean {
-    return this.props.testGenerationResult != null &&
-           this.props.prCreationResult == null &&
-           this.props.sessionId != null;
+    return (
+      this.props.testGenerationResult != null &&
+      this.props.prCreationResult == null &&
+      this.props.sessionId != null
+    );
   }
 
   canGenerateTests(): boolean {
-    return this.props.repositoryPath != null &&
-           this.props.targetFilePath != null;
+    return (
+      this.props.repositoryPath != null && this.props.targetFilePath != null
+    );
   }
 
   canCreatePR(): boolean {
-    return this.props.sessionId != null &&
-           this.props.testGenerationResult != null;
+    return (
+      this.props.sessionId != null && this.props.testGenerationResult != null
+    );
   }
 }

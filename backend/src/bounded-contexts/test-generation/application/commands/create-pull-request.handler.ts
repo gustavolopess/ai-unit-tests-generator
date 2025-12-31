@@ -1,17 +1,15 @@
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 import { Inject, Logger, NotFoundException } from '@nestjs/common';
 import { CreatePullRequestCommand } from './create-pull-request.command';
-import { TestGenerationRequest } from '../../domain/models/test-generation-request.entity';
-import { TestGenerationId } from '../../domain/models/test-generation-id.value-object';
-import type { ITestGenerationRequestRepository } from '../../domain/repositories/test-generation-request.repository.interface';
-import { TEST_GENERATION_REQUEST_REPOSITORY } from '../../domain/repositories/test-generation-request.repository.interface';
-import type { IPullRequestCreator } from '../../domain/services/pull-request-creator.interface';
-import { PULL_REQUEST_CREATOR } from '../../domain/services/pull-request-creator.interface';
+import { TestGenerationRequest } from '@/bounded-contexts/test-generation/domain/models/test-generation-request.entity';
+import { TestGenerationId } from '@/bounded-contexts/test-generation/domain/models/test-generation-id.value-object';
+import type { ITestGenerationRequestRepository } from '@/bounded-contexts/test-generation/domain/repositories/test-generation-request.repository.interface';
+import { TEST_GENERATION_REQUEST_REPOSITORY } from '@/bounded-contexts/test-generation/domain/repositories/test-generation-request.repository.interface';
+import type { IPullRequestCreator } from '@/bounded-contexts/test-generation/domain/services/pull-request-creator.interface';
+import { PULL_REQUEST_CREATOR } from '@/bounded-contexts/test-generation/domain/services/pull-request-creator.interface';
 
 @CommandHandler(CreatePullRequestCommand)
-export class CreatePullRequestHandler
-  implements ICommandHandler<CreatePullRequestCommand>
-{
+export class CreatePullRequestHandler implements ICommandHandler<CreatePullRequestCommand> {
   private readonly logger = new Logger(CreatePullRequestHandler.name);
 
   constructor(
@@ -26,7 +24,9 @@ export class CreatePullRequestHandler
   ): Promise<TestGenerationRequest> {
     const { testGenerationRequestId, onOutput } = command;
 
-    this.logger.log(`Creating pull request for request ${testGenerationRequestId}`);
+    this.logger.log(
+      `Creating pull request for request ${testGenerationRequestId}`,
+    );
 
     // Get test generation request
     const requestId = TestGenerationId.create(testGenerationRequestId);

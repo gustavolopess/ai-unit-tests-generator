@@ -1,17 +1,15 @@
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 import { Inject, Logger } from '@nestjs/common';
 import { GenerateTestsCommand } from './generate-tests.command';
-import { TestGenerationRequest } from '../../domain/models/test-generation-request.entity';
-import { FilePath } from '../../domain/models/file-path.value-object';
-import type { ITestGenerationRequestRepository } from '../../domain/repositories/test-generation-request.repository.interface';
-import { TEST_GENERATION_REQUEST_REPOSITORY } from '../../domain/repositories/test-generation-request.repository.interface';
-import type { ITestGenerator } from '../../domain/services/test-generator.interface';
-import { TEST_GENERATOR } from '../../domain/services/test-generator.interface';
+import { TestGenerationRequest } from '@/bounded-contexts/test-generation/domain/models/test-generation-request.entity';
+import { FilePath } from '@/bounded-contexts/test-generation/domain/models/file-path.value-object';
+import type { ITestGenerationRequestRepository } from '@/bounded-contexts/test-generation/domain/repositories/test-generation-request.repository.interface';
+import { TEST_GENERATION_REQUEST_REPOSITORY } from '@/bounded-contexts/test-generation/domain/repositories/test-generation-request.repository.interface';
+import type { ITestGenerator } from '@/bounded-contexts/test-generation/domain/services/test-generator.interface';
+import { TEST_GENERATOR } from '@/bounded-contexts/test-generation/domain/services/test-generator.interface';
 
 @CommandHandler(GenerateTestsCommand)
-export class GenerateTestsHandler
-  implements ICommandHandler<GenerateTestsCommand>
-{
+export class GenerateTestsHandler implements ICommandHandler<GenerateTestsCommand> {
   private readonly logger = new Logger(GenerateTestsHandler.name);
 
   constructor(

@@ -1,17 +1,23 @@
-import { CommandHandler, ICommandHandler, CommandBus, EventBus } from '@nestjs/cqrs';
+import {
+  CommandHandler,
+  ICommandHandler,
+  CommandBus,
+  EventBus,
+} from '@nestjs/cqrs';
 import { Inject, Logger } from '@nestjs/common';
 import { CreatePRForJobCommand } from './create-pr-for-job.command';
-import type { IJobRepository } from '../../domain/repositories/job.repository.interface';
-import { JOB_REPOSITORY } from '../../domain/repositories/job.repository.interface';
-import { JobStatus } from '../../domain/models/job-status.enum';
-import { CreatePullRequestCommand } from '../../../test-generation/application/commands';
+import type { IJobRepository } from '@/bounded-contexts/job-processing/domain/repositories/job.repository.interface';
+import { JOB_REPOSITORY } from '@/bounded-contexts/job-processing/domain/repositories/job.repository.interface';
+import { JobStatus } from '@/bounded-contexts/job-processing/domain/models/job-status.enum';
+import { CreatePullRequestCommand } from '@/bounded-contexts/test-generation/application/commands';
 import { AppendJobLogCommand, SetPRResultCommand } from './';
-import { PRCreatedForJobEvent, PRCreationFailedForJobEvent } from '../../domain/events';
+import {
+  PRCreatedForJobEvent,
+  PRCreationFailedForJobEvent,
+} from '@/bounded-contexts/job-processing/domain/events';
 
 @CommandHandler(CreatePRForJobCommand)
-export class CreatePRForJobHandler
-  implements ICommandHandler<CreatePRForJobCommand>
-{
+export class CreatePRForJobHandler implements ICommandHandler<CreatePRForJobCommand> {
   private readonly logger = new Logger(CreatePRForJobHandler.name);
 
   constructor(
@@ -35,7 +41,9 @@ export class CreatePRForJobHandler
 
       // Check if PR creation is needed
       if (!job.needsPRCreation()) {
-        this.logger.log(`Job ${jobId} does not need PR creation, completing job`);
+        this.logger.log(
+          `Job ${jobId} does not need PR creation, completing job`,
+        );
         job.updateStatus(JobStatus.COMPLETED);
         await this.jobRepository.save(job);
         return;
@@ -62,7 +70,9 @@ export class CreatePRForJobHandler
         new CreatePullRequestCommand(
           job.testGenerationRequestId,
           async (output: string) => {
-            await this.commandBus.execute(new AppendJobLogCommand(jobId, output));
+            await this.commandBus.execute(
+              new AppendJobLogCommand(jobId, output),
+            );
           },
         ),
       );
@@ -97,13 +107,17 @@ export class CreatePRForJobHandler
       // Publish event to trigger next step in saga
       this.eventBus.publish(new PRCreatedForJobEvent(jobId));
     } catch (error) {
-      this.logger.error(`Failed to create PR for job ${jobId}: ${error.message}`);
+      this.logger.error(
+        `Failed to create PR for job ${jobId}: ${error.message}`,
+      );
       await this.commandBus.execute(
         new AppendJobLogCommand(jobId, `ERROR: ${error.message}`),
       );
 
       // Publish failure event to trigger saga error handling
-      this.eventBus.publish(new PRCreationFailedForJobEvent(jobId, error.message));
+      this.eventBus.publish(
+        new PRCreationFailedForJobEvent(jobId, error.message),
+      );
       throw error;
     }
   }

@@ -1,5 +1,5 @@
-import { Job } from '../models/job.entity';
-import { JobId } from '../models/job-id.value-object';
+import { Job } from '@/bounded-contexts/job-processing/domain/models/job.entity';
+import { JobId } from '@/bounded-contexts/job-processing/domain/models/job-id.value-object';
 
 export interface IJobRepository {
   save(job: Job): Promise<void>;

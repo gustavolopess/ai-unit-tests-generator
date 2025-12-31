@@ -6,4 +6,4 @@ import { JobProcessingModule } from './bounded-contexts/job-processing/job-proce
 @Module({
   imports: [DatabaseModule, JobProcessingModule, CoverageModule],
 })
-export class AppModule { }
+export class AppModule {}

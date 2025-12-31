@@ -1,18 +1,25 @@
-import { CommandHandler, ICommandHandler, CommandBus, QueryBus, EventBus } from '@nestjs/cqrs';
+import {
+  CommandHandler,
+  ICommandHandler,
+  CommandBus,
+  QueryBus,
+  EventBus,
+} from '@nestjs/cqrs';
 import { Inject, Logger } from '@nestjs/common';
 import { GenerateTestsForJobCommand } from './generate-tests-for-job.command';
-import type { IJobRepository } from '../../domain/repositories/job.repository.interface';
-import { JOB_REPOSITORY } from '../../domain/repositories/job.repository.interface';
-import { JobStatus } from '../../domain/models/job-status.enum';
-import { GenerateTestsCommand } from '../../../test-generation/application/commands';
-import { GetRepositoryQuery } from '../../../repository-analysis/application/queries';
+import type { IJobRepository } from '@/bounded-contexts/job-processing/domain/repositories/job.repository.interface';
+import { JOB_REPOSITORY } from '@/bounded-contexts/job-processing/domain/repositories/job.repository.interface';
+import { JobStatus } from '@/bounded-contexts/job-processing/domain/models/job-status.enum';
+import { GenerateTestsCommand } from '@/bounded-contexts/test-generation/application/commands';
+import { GetRepositoryQuery } from '@/bounded-contexts/git-repo-analysis/application/queries';
 import { AppendJobLogCommand, SetTestGenerationDataCommand } from './';
-import { TestGenerationCompletedForJobEvent, TestGenerationFailedForJobEvent } from '../../domain/events';
+import {
+  TestGenerationCompletedForJobEvent,
+  TestGenerationFailedForJobEvent,
+} from '@/bounded-contexts/job-processing/domain/events';
 
 @CommandHandler(GenerateTestsForJobCommand)
-export class GenerateTestsForJobHandler
-  implements ICommandHandler<GenerateTestsForJobCommand>
-{
+export class GenerateTestsForJobHandler implements ICommandHandler<GenerateTestsForJobCommand> {
   private readonly logger = new Logger(GenerateTestsForJobHandler.name);
 
   constructor(
@@ -77,7 +84,9 @@ export class GenerateTestsForJobHandler
           workDir,
           job.targetFilePath!,
           async (output: string) => {
-            await this.commandBus.execute(new AppendJobLogCommand(jobId, output));
+            await this.commandBus.execute(
+              new AppendJobLogCommand(jobId, output),
+            );
           },
         ),
       );
@@ -92,7 +101,10 @@ export class GenerateTestsForJobHandler
       }
 
       await this.commandBus.execute(
-        new AppendJobLogCommand(jobId, 'Test generation completed successfully'),
+        new AppendJobLogCommand(
+          jobId,
+          'Test generation completed successfully',
+        ),
       );
 
       // Save test generation data
@@ -112,7 +124,9 @@ export class GenerateTestsForJobHandler
       // Refresh job to get the updated test generation result
       const updatedJob = await this.jobRepository.findById(jobId);
       if (!updatedJob) {
-        throw new Error(`Job ${jobId} not found after setting test generation data`);
+        throw new Error(
+          `Job ${jobId} not found after setting test generation data`,
+        );
       }
 
       // Update job status
@@ -124,13 +138,17 @@ export class GenerateTestsForJobHandler
       // Publish event to trigger next step in saga
       this.eventBus.publish(new TestGenerationCompletedForJobEvent(jobId));
     } catch (error) {
-      this.logger.error(`Failed to generate tests for job ${jobId}: ${error.message}`);
+      this.logger.error(
+        `Failed to generate tests for job ${jobId}: ${error.message}`,
+      );
       await this.commandBus.execute(
         new AppendJobLogCommand(jobId, `ERROR: ${error.message}`),
       );
 
       // Publish failure event to trigger saga error handling
-      this.eventBus.publish(new TestGenerationFailedForJobEvent(jobId, error.message));
+      this.eventBus.publish(
+        new TestGenerationFailedForJobEvent(jobId, error.message),
+      );
       throw error;
     }
   }

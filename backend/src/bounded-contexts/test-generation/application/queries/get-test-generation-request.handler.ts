@@ -1,15 +1,13 @@
 import { QueryHandler, IQueryHandler } from '@nestjs/cqrs';
 import { Inject, NotFoundException } from '@nestjs/common';
 import { GetTestGenerationRequestQuery } from './get-test-generation-request.query';
-import { TestGenerationRequest } from '../../domain/models/test-generation-request.entity';
-import { TestGenerationId } from '../../domain/models/test-generation-id.value-object';
-import type { ITestGenerationRequestRepository } from '../../domain/repositories/test-generation-request.repository.interface';
-import { TEST_GENERATION_REQUEST_REPOSITORY } from '../../domain/repositories/test-generation-request.repository.interface';
+import { TestGenerationRequest } from '@/bounded-contexts/test-generation/domain/models/test-generation-request.entity';
+import { TestGenerationId } from '@/bounded-contexts/test-generation/domain/models/test-generation-id.value-object';
+import type { ITestGenerationRequestRepository } from '@/bounded-contexts/test-generation/domain/repositories/test-generation-request.repository.interface';
+import { TEST_GENERATION_REQUEST_REPOSITORY } from '@/bounded-contexts/test-generation/domain/repositories/test-generation-request.repository.interface';
 
 @QueryHandler(GetTestGenerationRequestQuery)
-export class GetTestGenerationRequestHandler
-  implements IQueryHandler<GetTestGenerationRequestQuery>
-{
+export class GetTestGenerationRequestHandler implements IQueryHandler<GetTestGenerationRequestQuery> {
   constructor(
     @Inject(TEST_GENERATION_REQUEST_REPOSITORY)
     private readonly requestRepository: ITestGenerationRequestRepository,

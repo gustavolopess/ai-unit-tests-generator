@@ -1,5 +1,5 @@
-import { IDomainEvent } from '../../../../shared/kernel/domain-event.interface';
-import { JobId } from '../models/job-id.value-object';
+import { IDomainEvent } from '@/shared/kernel/domain-event.interface';
+import { JobId } from '@/bounded-contexts/job-processing/domain/models/job-id.value-object';
 
 export class JobFailedEvent implements IDomainEvent {
   readonly eventName = 'job.failed';

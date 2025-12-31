@@ -1,14 +1,12 @@
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 import { Inject, Logger, NotFoundException } from '@nestjs/common';
 import { SetJobErrorCommand } from './set-job-error.command';
-import { JobId } from '../../domain/models/job-id.value-object';
-import type { IJobRepository } from '../../domain/repositories/job.repository.interface';
-import { JOB_REPOSITORY } from '../../domain/repositories/job.repository.interface';
+import { JobId } from '@/bounded-contexts/job-processing/domain/models/job-id.value-object';
+import type { IJobRepository } from '@/bounded-contexts/job-processing/domain/repositories/job.repository.interface';
+import { JOB_REPOSITORY } from '@/bounded-contexts/job-processing/domain/repositories/job.repository.interface';
 
 @CommandHandler(SetJobErrorCommand)
-export class SetJobErrorHandler
-  implements ICommandHandler<SetJobErrorCommand>
-{
+export class SetJobErrorHandler implements ICommandHandler<SetJobErrorCommand> {
   private readonly logger = new Logger(SetJobErrorHandler.name);
 
   constructor(

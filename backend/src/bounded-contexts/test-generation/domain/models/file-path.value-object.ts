@@ -1,4 +1,4 @@
-import { ValueObject } from '../../../../shared/kernel/value-object.base';
+import { ValueObject } from '@/shared/kernel/value-object.base';
 
 export class FilePath extends ValueObject {
   private readonly value: string;

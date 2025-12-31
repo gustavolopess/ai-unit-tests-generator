@@ -1,5 +1,5 @@
-import { TestGenerationRequest } from '../models/test-generation-request.entity';
-import { TestGenerationId } from '../models/test-generation-id.value-object';
+import { TestGenerationRequest } from '@/bounded-contexts/test-generation/domain/models/test-generation-request.entity';
+import { TestGenerationId } from '@/bounded-contexts/test-generation/domain/models/test-generation-id.value-object';
 
 export const TEST_GENERATION_REQUEST_REPOSITORY = Symbol(
   'TEST_GENERATION_REQUEST_REPOSITORY',

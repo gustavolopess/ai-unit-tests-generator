@@ -1,18 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ITestGenerationRequestRepository } from '../domain/repositories/test-generation-request.repository.interface';
-import { TestGenerationRequest } from '../domain/models/test-generation-request.entity';
-import { TestGenerationId } from '../domain/models/test-generation-id.value-object';
-import { FilePath } from '../domain/models/file-path.value-object';
+import { ITestGenerationRequestRepository } from '@/bounded-contexts/test-generation/domain/repositories/test-generation-request.repository.interface';
+import { TestGenerationRequest } from '@/bounded-contexts/test-generation/domain/models/test-generation-request.entity';
+import { TestGenerationId } from '@/bounded-contexts/test-generation/domain/models/test-generation-id.value-object';
+import { FilePath } from '@/bounded-contexts/test-generation/domain/models/file-path.value-object';
 import { TestGenerationRequestEntity } from './entities/test-generation-request.entity';
-import { TestGenerationStatus } from '../domain/models/test-generation-request.entity';
+import { TestGenerationStatus } from '@/bounded-contexts/test-generation/domain/models/test-generation-request.entity';
 
 @Injectable()
-export class TypeOrmTestGenerationRequestRepository
-  implements ITestGenerationRequestRepository
-{
-  private readonly logger = new Logger(TypeOrmTestGenerationRequestRepository.name);
+export class TypeOrmTestGenerationRequestRepository implements ITestGenerationRequestRepository {
+  private readonly logger = new Logger(
+    TypeOrmTestGenerationRequestRepository.name,
+  );
 
   constructor(
     @InjectRepository(TestGenerationRequestEntity)
@@ -39,7 +39,9 @@ export class TypeOrmTestGenerationRequestRepository
     return this.toDomain(entity);
   }
 
-  async findByRepositoryId(repositoryId: string): Promise<TestGenerationRequest[]> {
+  async findByRepositoryId(
+    repositoryId: string,
+  ): Promise<TestGenerationRequest[]> {
     const entities = await this.repository.find({
       where: { repositoryId },
       order: { createdAt: 'DESC' },
@@ -63,7 +65,9 @@ export class TypeOrmTestGenerationRequestRepository
   }
 
   // Mapper methods
-  private toEntity(request: TestGenerationRequest): TestGenerationRequestEntity {
+  private toEntity(
+    request: TestGenerationRequest,
+  ): TestGenerationRequestEntity {
     const entity = new TestGenerationRequestEntity();
     entity.id = request.id.getValue();
     entity.repositoryId = request.repositoryId;

@@ -1,4 +1,4 @@
-import { IDomainEvent } from '../../../../shared/kernel/domain-event.interface';
+import { IDomainEvent } from '@/shared/kernel/domain-event.interface';
 
 export class TestGenerationFailedForJobEvent implements IDomainEvent {
   readonly eventName = 'job-processing.test-generation-failed';

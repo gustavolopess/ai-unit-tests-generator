@@ -14,7 +14,7 @@ import {
   TestGenerationFailedForJobEvent,
   PRCreatedForJobEvent,
   PRCreationFailedForJobEvent,
-} from '../../domain/events';
+} from '@/bounded-contexts/job-processing/domain/events';
 import {
   SetRepositoryPathForJobCommand,
   InstallDependenciesCommand,
@@ -23,7 +23,7 @@ import {
   CreatePRForJobCommand,
   CompleteJobCommand,
   FailJobCommand,
-} from '../commands';
+} from '@/bounded-contexts/job-processing/application/commands';
 
 /**
  * Job Processing Saga
@@ -53,7 +53,9 @@ export class JobProcessingSaga {
       ofType(JobCreatedEvent),
       delay(100), // Small delay to ensure job is persisted
       map((event: JobCreatedEvent) => {
-        this.logger.log(`Saga: Job created ${event.jobId}, setting repository path`);
+        this.logger.log(
+          `Saga: Job created ${event.jobId}, setting repository path`,
+        );
         return new SetRepositoryPathForJobCommand(event.jobId.getValue());
       }),
     );
@@ -67,7 +69,9 @@ export class JobProcessingSaga {
     return events$.pipe(
       ofType(RepositoryPathSetEvent),
       map((event: RepositoryPathSetEvent) => {
-        this.logger.log(`Saga: Repository path set for job ${event.jobId}, starting dependency installation`);
+        this.logger.log(
+          `Saga: Repository path set for job ${event.jobId}, starting dependency installation`,
+        );
         return new InstallDependenciesCommand(event.jobId);
       }),
     );
@@ -81,7 +85,9 @@ export class JobProcessingSaga {
     return events$.pipe(
       ofType(DependenciesInstalledEvent),
       map((event: DependenciesInstalledEvent) => {
-        this.logger.log(`Saga: Dependencies installed for job ${event.jobId}, starting coverage analysis`);
+        this.logger.log(
+          `Saga: Dependencies installed for job ${event.jobId}, starting coverage analysis`,
+        );
         return new AnalyzeCoverageForJobCommand(event.jobId);
       }),
     );
@@ -91,11 +97,15 @@ export class JobProcessingSaga {
    * When coverage analysis completes, check if test generation is needed
    */
   @Saga()
-  coverageAnalysisCompleted = (events$: Observable<any>): Observable<ICommand> => {
+  coverageAnalysisCompleted = (
+    events$: Observable<any>,
+  ): Observable<ICommand> => {
     return events$.pipe(
       ofType(CoverageAnalysisCompletedForJobEvent),
       map((event: CoverageAnalysisCompletedForJobEvent) => {
-        this.logger.log(`Saga: Coverage analysis completed for job ${event.jobId}`);
+        this.logger.log(
+          `Saga: Coverage analysis completed for job ${event.jobId}`,
+        );
         // The command handler will check if the job needs test generation
         return new GenerateTestsForJobCommand(event.jobId);
       }),
@@ -106,11 +116,15 @@ export class JobProcessingSaga {
    * When test generation completes, check if PR creation is needed
    */
   @Saga()
-  testGenerationCompleted = (events$: Observable<any>): Observable<ICommand> => {
+  testGenerationCompleted = (
+    events$: Observable<any>,
+  ): Observable<ICommand> => {
     return events$.pipe(
       ofType(TestGenerationCompletedForJobEvent),
       map((event: TestGenerationCompletedForJobEvent) => {
-        this.logger.log(`Saga: Test generation completed for job ${event.jobId}, checking if PR creation needed`);
+        this.logger.log(
+          `Saga: Test generation completed for job ${event.jobId}, checking if PR creation needed`,
+        );
         return new CreatePRForJobCommand(event.jobId);
       }),
     );
@@ -124,7 +138,9 @@ export class JobProcessingSaga {
     return events$.pipe(
       ofType(PRCreatedForJobEvent),
       map((event: PRCreatedForJobEvent) => {
-        this.logger.log(`Saga: PR created for job ${event.jobId}, completing job`);
+        this.logger.log(
+          `Saga: PR created for job ${event.jobId}, completing job`,
+        );
         return new CompleteJobCommand(event.jobId);
       }),
     );
@@ -138,7 +154,9 @@ export class JobProcessingSaga {
     return events$.pipe(
       ofType(CoverageAnalysisFailedForJobEvent),
       map((event: CoverageAnalysisFailedForJobEvent) => {
-        this.logger.error(`Saga: Coverage analysis failed for job ${event.jobId}: ${event.error}`);
+        this.logger.error(
+          `Saga: Coverage analysis failed for job ${event.jobId}: ${event.error}`,
+        );
         return new FailJobCommand(event.jobId, event.error);
       }),
     );
@@ -152,7 +170,9 @@ export class JobProcessingSaga {
     return events$.pipe(
       ofType(TestGenerationFailedForJobEvent),
       map((event: TestGenerationFailedForJobEvent) => {
-        this.logger.error(`Saga: Test generation failed for job ${event.jobId}: ${event.error}`);
+        this.logger.error(
+          `Saga: Test generation failed for job ${event.jobId}: ${event.error}`,
+        );
         return new FailJobCommand(event.jobId, event.error);
       }),
     );
@@ -166,7 +186,9 @@ export class JobProcessingSaga {
     return events$.pipe(
       ofType(PRCreationFailedForJobEvent),
       map((event: PRCreationFailedForJobEvent) => {
-        this.logger.error(`Saga: PR creation failed for job ${event.jobId}: ${event.error}`);
+        this.logger.error(
+          `Saga: PR creation failed for job ${event.jobId}: ${event.error}`,
+        );
         return new FailJobCommand(event.jobId, event.error);
       }),
     );

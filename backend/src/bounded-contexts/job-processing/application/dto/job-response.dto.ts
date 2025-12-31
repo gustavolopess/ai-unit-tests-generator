@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { JobStatus } from '../../domain/models/job-status.enum';
+import { JobStatus } from '@/bounded-contexts/job-processing/domain/models/job-status.enum';
 
 export class FileCoverageDto {
   @ApiProperty({
@@ -15,7 +15,8 @@ export class FileCoverageDto {
   coverage: number;
 
   @ApiProperty({
-    description: 'Indicates if the file coverage is below the target threshold (default 80%)',
+    description:
+      'Indicates if the file coverage is below the target threshold (default 80%)',
     example: false,
   })
   needsImprovement: boolean;

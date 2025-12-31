@@ -1,20 +1,26 @@
-import { CommandHandler, ICommandHandler, CommandBus, EventBus } from '@nestjs/cqrs';
+import {
+  CommandHandler,
+  ICommandHandler,
+  CommandBus,
+  EventBus,
+} from '@nestjs/cqrs';
 import { Inject, Logger } from '@nestjs/common';
 import { AnalyzeCoverageForJobCommand } from './analyze-coverage-for-job.command';
-import type { IJobRepository } from '../../domain/repositories/job.repository.interface';
-import { JOB_REPOSITORY } from '../../domain/repositories/job.repository.interface';
-import { JobStatus } from '../../domain/models/job-status.enum';
-import { AnalyzeCoverageCommand } from '../../../repository-analysis/application/commands';
+import type { IJobRepository } from '@/bounded-contexts/job-processing/domain/repositories/job.repository.interface';
+import { JOB_REPOSITORY } from '@/bounded-contexts/job-processing/domain/repositories/job.repository.interface';
+import { JobStatus } from '@/bounded-contexts/job-processing/domain/models/job-status.enum';
+import { AnalyzeCoverageCommand } from '@/bounded-contexts/git-repo-analysis/application/commands';
 import { AppendJobLogCommand, SetCoverageResultCommand } from './';
-import { FileCoverageDto } from '../dto/job-response.dto';
-import { CoverageAnalysisCompletedForJobEvent, CoverageAnalysisFailedForJobEvent } from '../../domain/events';
+import { FileCoverageDto } from '@/bounded-contexts/job-processing/application/dto/job-response.dto';
+import {
+  CoverageAnalysisCompletedForJobEvent,
+  CoverageAnalysisFailedForJobEvent,
+} from '@/bounded-contexts/job-processing/domain/events';
+import { AppConfig } from '@/shared/config/app.config';
 
 @CommandHandler(AnalyzeCoverageForJobCommand)
-export class AnalyzeCoverageForJobHandler
-  implements ICommandHandler<AnalyzeCoverageForJobCommand>
-{
+export class AnalyzeCoverageForJobHandler implements ICommandHandler<AnalyzeCoverageForJobCommand> {
   private readonly logger = new Logger(AnalyzeCoverageForJobHandler.name);
-  private readonly coverageThreshold: number = 80;
 
   constructor(
     @Inject(JOB_REPOSITORY)
@@ -50,7 +56,9 @@ export class AnalyzeCoverageForJobHandler
           job.repositoryId,
           job.entrypoint,
           async (output: string) => {
-            await this.commandBus.execute(new AppendJobLogCommand(jobId, output));
+            await this.commandBus.execute(
+              new AppendJobLogCommand(jobId, output),
+            );
           },
         ),
       );
@@ -62,14 +70,14 @@ export class AnalyzeCoverageForJobHandler
         ),
       );
 
-      // Convert to DTO format
-      const fileCoverages: FileCoverageDto[] = analyzedRepository.fileCoverages.map(
-        (fc) => ({
+      // Convert to DTO format using configured threshold
+      const fileCoverages: FileCoverageDto[] =
+        analyzedRepository.fileCoverages.map((fc) => ({
           file: fc.filePath,
           coverage: fc.coveragePercentage,
-          needsImprovement: fc.coveragePercentage < this.coverageThreshold,
-        }),
-      );
+          needsImprovement:
+            fc.coveragePercentage < AppConfig.coverage.threshold,
+        }));
 
       const result = this.buildCoverageResult(fileCoverages);
 
@@ -100,13 +108,17 @@ export class AnalyzeCoverageForJobHandler
       // Publish event to trigger next step in saga
       this.eventBus.publish(new CoverageAnalysisCompletedForJobEvent(jobId));
     } catch (error) {
-      this.logger.error(`Failed to analyze coverage for job ${jobId}: ${error.message}`);
+      this.logger.error(
+        `Failed to analyze coverage for job ${jobId}: ${error.message}`,
+      );
       await this.commandBus.execute(
         new AppendJobLogCommand(jobId, `ERROR: ${error.message}`),
       );
 
       // Publish failure event to trigger saga error handling
-      this.eventBus.publish(new CoverageAnalysisFailedForJobEvent(jobId, error.message));
+      this.eventBus.publish(
+        new CoverageAnalysisFailedForJobEvent(jobId, error.message),
+      );
       throw error;
     }
   }

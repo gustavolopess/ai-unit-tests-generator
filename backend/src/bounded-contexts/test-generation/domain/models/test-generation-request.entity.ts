@@ -1,9 +1,9 @@
-import { AggregateRoot } from '../../../../shared/kernel/entity.base';
+import { AggregateRoot } from '@/shared/kernel/entity.base';
 import { TestGenerationId } from './test-generation-id.value-object';
 import { FilePath } from './file-path.value-object';
-import { TestGenerationStartedEvent } from '../events/test-generation-started.event';
-import { TestsGeneratedEvent } from '../events/tests-generated.event';
-import { PullRequestCreatedEvent } from '../events/pull-request-created.event';
+import { TestGenerationStartedEvent } from '@/bounded-contexts/test-generation/domain/events/test-generation-started.event';
+import { TestsGeneratedEvent } from '@/bounded-contexts/test-generation/domain/events/tests-generated.event';
+import { PullRequestCreatedEvent } from '@/bounded-contexts/test-generation/domain/events/pull-request-created.event';
 
 export enum TestGenerationStatus {
   PENDING = 'PENDING',
@@ -53,7 +53,11 @@ export class TestGenerationRequest extends AggregateRoot<TestGenerationId> {
     });
 
     request.apply(
-      new TestGenerationStartedEvent(id, repositoryId, targetFilePath.getValue()),
+      new TestGenerationStartedEvent(
+        id,
+        repositoryId,
+        targetFilePath.getValue(),
+      ),
     );
 
     return request;

@@ -1,16 +1,14 @@
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 import { Logger } from '@nestjs/common';
 import { AppendJobOutputCommand } from './append-job-output.command';
-import { JobLogService } from '../../infrastructure/job-log.service';
+import { JobLogService } from '@/bounded-contexts/job-processing/infrastructure/job-log.service';
 
 /**
  * @deprecated Use AppendJobLogCommand instead
  * This handler is kept for backward compatibility and delegates to JobLogService
  */
 @CommandHandler(AppendJobOutputCommand)
-export class AppendJobOutputHandler
-  implements ICommandHandler<AppendJobOutputCommand>
-{
+export class AppendJobOutputHandler implements ICommandHandler<AppendJobOutputCommand> {
   private readonly logger = new Logger(AppendJobOutputHandler.name);
 
   constructor(private readonly jobLogService: JobLogService) {}

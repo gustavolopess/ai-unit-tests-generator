@@ -1,4 +1,4 @@
-import { IDomainEvent } from '../../../../shared/kernel/domain-event.interface';
+import { IDomainEvent } from '@/shared/kernel/domain-event.interface';
 
 export class PRCreationFailedForJobEvent implements IDomainEvent {
   readonly eventName = 'job-processing.pr-creation-failed';

@@ -1,6 +1,6 @@
-import { IDomainEvent } from '../../../../shared/kernel/domain-event.interface';
-import { JobId } from '../models/job-id.value-object';
-import { JobStatus } from '../models/job-status.enum';
+import { IDomainEvent } from '@/shared/kernel/domain-event.interface';
+import { JobId } from '@/bounded-contexts/job-processing/domain/models/job-id.value-object';
+import { JobStatus } from '@/bounded-contexts/job-processing/domain/models/job-status.enum';
 
 export class JobStatusChangedEvent implements IDomainEvent {
   readonly eventName = 'job.status.changed';

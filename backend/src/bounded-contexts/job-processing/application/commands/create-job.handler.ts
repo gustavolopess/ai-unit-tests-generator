@@ -1,9 +1,9 @@
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 import { Inject, Logger } from '@nestjs/common';
 import { CreateJobCommand } from './create-job.command';
-import { Job } from '../../domain/models/job.entity';
-import type { IJobRepository } from '../../domain/repositories/job.repository.interface';
-import { JOB_REPOSITORY } from '../../domain/repositories/job.repository.interface';
+import { Job } from '@/bounded-contexts/job-processing/domain/models/job.entity';
+import type { IJobRepository } from '@/bounded-contexts/job-processing/domain/repositories/job.repository.interface';
+import { JOB_REPOSITORY } from '@/bounded-contexts/job-processing/domain/repositories/job.repository.interface';
 
 @CommandHandler(CreateJobCommand)
 export class CreateJobHandler implements ICommandHandler<CreateJobCommand> {
@@ -17,7 +17,12 @@ export class CreateJobHandler implements ICommandHandler<CreateJobCommand> {
   async execute(command: CreateJobCommand): Promise<Job> {
     const { repositoryId, targetFilePath, parentJobId, entrypoint } = command;
 
-    const job = Job.create(repositoryId, targetFilePath, parentJobId, entrypoint);
+    const job = Job.create(
+      repositoryId,
+      targetFilePath,
+      parentJobId,
+      entrypoint,
+    );
 
     // If this is a child job, inherit parent's analysis results
     if (parentJobId) {

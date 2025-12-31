@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { claude } from '@instantlyeasy/claude-code-sdk-ts';
-import { IPullRequestCreator, PullRequestResult } from '../domain/services/pull-request-creator.interface';
+import {
+  IPullRequestCreator,
+  PullRequestResult,
+} from '@/bounded-contexts/test-generation/domain/services/pull-request-creator.interface';
 
 @Injectable()
 export class ClaudePullRequestCreatorService implements IPullRequestCreator {
@@ -17,7 +20,9 @@ export class ClaudePullRequestCreatorService implements IPullRequestCreator {
     let summary = '';
 
     try {
-      this.logger.log(`Creating PR using session ${sessionId} in ${workingDirectory}`);
+      this.logger.log(
+        `Creating PR using session ${sessionId} in ${workingDirectory}`,
+      );
 
       if (onOutput) {
         onOutput(`Creating pull request...`);
@@ -34,12 +39,16 @@ export class ClaudePullRequestCreatorService implements IPullRequestCreator {
 
           // Capture text from assistant messages
           if (msg.type === 'assistant') {
-            const textBlocks = msg.content.filter((block) => block.type === 'text');
+            const textBlocks = msg.content.filter(
+              (block) => block.type === 'text',
+            );
             const text = textBlocks.map((block: any) => block.text).join('\n');
             summary += text;
 
             // Try to extract PR URL from text
-            const urlMatch = text.match(/https:\/\/github\.com\/[^\s]+\/pull\/(\d+)/);
+            const urlMatch = text.match(
+              /https:\/\/github\.com\/[^\s]+\/pull\/(\d+)/,
+            );
             if (urlMatch) {
               prUrl = urlMatch[0];
               prNumber = parseInt(urlMatch[1], 10);
@@ -56,7 +65,9 @@ export class ClaudePullRequestCreatorService implements IPullRequestCreator {
 
       if (!prUrl) {
         // Try to extract from final result
-        const urlMatch = (result || summary).match(/https:\/\/github\.com\/[^\s]+\/pull\/(\d+)/);
+        const urlMatch = (result || summary).match(
+          /https:\/\/github\.com\/[^\s]+\/pull\/(\d+)/,
+        );
         if (urlMatch) {
           prUrl = urlMatch[0];
           prNumber = parseInt(urlMatch[1], 10);

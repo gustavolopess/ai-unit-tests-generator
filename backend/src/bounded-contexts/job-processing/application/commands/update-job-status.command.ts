@@ -1,4 +1,4 @@
-import { JobStatus } from '../../domain/models/job-status.enum';
+import { JobStatus } from '@/bounded-contexts/job-processing/domain/models/job-status.enum';
 
 export class UpdateJobStatusCommand {
   constructor(

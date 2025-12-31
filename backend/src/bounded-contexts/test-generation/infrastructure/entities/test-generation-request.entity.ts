@@ -35,7 +35,12 @@ export class TestGenerationRequestEntity {
   @Index()
   sessionId?: string;
 
-  @Column({ name: 'test_file_path', type: 'varchar', length: 500, nullable: true })
+  @Column({
+    name: 'test_file_path',
+    type: 'varchar',
+    length: 500,
+    nullable: true,
+  })
   testFilePath?: string;
 
   @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })

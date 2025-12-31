@@ -8,14 +8,19 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { RepositoryEntity } from '../../../repository-analysis/infrastructure/entities/repository.entity';
+import { GitRepoEntity } from '@/bounded-contexts/git-repo-analysis/infrastructure/entities/git-repo.entity';
 
 @Entity('jobs')
 export class JobEntity {
   @PrimaryColumn('varchar', { length: 36 })
   id: string;
 
-  @Column({ name: 'parent_job_id', type: 'varchar', length: 36, nullable: true })
+  @Column({
+    name: 'parent_job_id',
+    type: 'varchar',
+    length: 36,
+    nullable: true,
+  })
   @Index()
   parentJobId?: string;
 
@@ -23,11 +28,16 @@ export class JobEntity {
   @Index()
   repositoryId: string;
 
-  @ManyToOne(() => RepositoryEntity, { onDelete: 'CASCADE' })
+  @ManyToOne(() => GitRepoEntity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'repository_id' })
-  repository?: RepositoryEntity;
+  repository?: GitRepoEntity;
 
-  @Column({ name: 'target_file_path', type: 'varchar', length: 500, nullable: true })
+  @Column({
+    name: 'target_file_path',
+    type: 'varchar',
+    length: 500,
+    nullable: true,
+  })
   targetFilePath?: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
@@ -56,7 +66,12 @@ export class JobEntity {
   @Column({ type: 'text', nullable: true })
   error?: string;
 
-  @Column({ name: 'repository_path', type: 'varchar', length: 500, nullable: true })
+  @Column({
+    name: 'repository_path',
+    type: 'varchar',
+    length: 500,
+    nullable: true,
+  })
   repositoryPath?: string;
 
   @Column({ name: 'session_id', type: 'varchar', length: 255, nullable: true })
@@ -77,7 +92,11 @@ export class JobEntity {
     files: Array<{ file: string; coverage: number }>;
   };
 
-  @Column({ name: 'test_generation_result', type: 'simple-json', nullable: true })
+  @Column({
+    name: 'test_generation_result',
+    type: 'simple-json',
+    nullable: true,
+  })
   testGenerationResult?: {
     filePath: string;
     testFilePath?: string;
