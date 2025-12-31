@@ -260,3 +260,4 @@ To enhance the system's reliability, scalability, and performance, the following
 | **Observability** | **Structured Logging & Aggregation** | Move beyond console logging to a structured logging solution (e.g., Winston, Pino) integrated with a log aggregator (ELK, verify) for better debugging and monitoring in production. |
 | **Maintenance** | **Automated Cleanup** | Implement a Cron job to clean up old job records and temporary filesystem directories to prevent disk space exhaustion. |
 | **Security** | **API Authentication** | Add API Key or OAuth authentication to protect the endpoints, especially the job creation and PR submission capabilities. |
+| **Security** | **Docker Sandboxing** | Execute repository cloning, dependency installation, and test execution in isolated Docker containers to prevent running untrusted code on the host machine. |
