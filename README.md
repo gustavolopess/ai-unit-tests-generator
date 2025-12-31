@@ -247,3 +247,16 @@ To ensure system stability and prevent race conditions (especially during `npm i
 3. **Release:** Once the critical section is done, the lock is released (`lock_acquired = false`), allowing pending jobs to proceed.
 
 This design allows the system to scale horizontally for *different* repositories while maintaining data integrity for *the same* repository.
+
+## 🚀 Next Steps & Future Improvements
+
+To enhance the system's reliability, scalability, and performance, the following improvements are planned or recommended:
+
+| Area | Improvement | Reason |
+| :--- | :--- | :--- |
+| **Orchestration** | **Use BullMQ (or similar)** | Currently, the Saga is implemented using in-memory handlers (`CommandBus`/`EventBus`). Replacing this with a persistent job queue (like **BullMQ**) will ensure fault tolerance, allow job retries on crash, and enable horizontal scaling of workers. |
+| **Real-time API** | **WebSockets / Server-Sent Events (SSE)** | The frontend currently polls the API for job status updates. Using WebSockets (via `socket.io` or NestJS Gateways) will provide a more efficient, real-time user experience and reduce server load. |
+| **Persistence** | **Database Migrations** | Implement formal database migrations (e.g., TypeORM migrations) to manage schema changes safely across deployments. |
+| **Observability** | **Structured Logging & Aggregation** | Move beyond console logging to a structured logging solution (e.g., Winston, Pino) integrated with a log aggregator (ELK, verify) for better debugging and monitoring in production. |
+| **Maintenance** | **Automated Cleanup** | Implement a Cron job to clean up old job records and temporary filesystem directories to prevent disk space exhaustion. |
+| **Security** | **API Authentication** | Add API Key or OAuth authentication to protect the endpoints, especially the job creation and PR submission capabilities. |
