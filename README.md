@@ -261,3 +261,4 @@ To enhance the system's reliability, scalability, and performance, the following
 | **Maintenance** | **Automated Cleanup** | Implement a Cron job to clean up old job records and temporary filesystem directories to prevent disk space exhaustion. |
 | **Security** | **API Authentication** | Add API Key or OAuth authentication to protect the endpoints, especially the job creation and PR submission capabilities. |
 | **Security** | **Docker Sandboxing** | Execute repository cloning, dependency installation, and test execution in isolated Docker containers to prevent running untrusted code on the host machine. |
+| **Testing** | **E2E & Integration Coverage** | Increase coverage of end-to-end flows and integration points between bounded contexts to ensure overall system stability and correctness. |
