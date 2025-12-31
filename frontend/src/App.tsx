@@ -10,7 +10,7 @@ function App() {
     <div className="app-container">
       <header style={{ marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '2.5rem', fontWeight: 'bold', background: 'linear-gradient(to right, #646cff, #9f1239)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-          GitHub Coverage AI
+          CovBumperAI
         </h1>
         <p style={{ color: '#888' }}>
           Automated test coverage analysis, generation, and PR creation
@@ -28,10 +28,6 @@ function App() {
           <JobCreator onJobCreated={setCurrentJobId} />
         )}
       </main>
-
-      <footer style={{ marginTop: '4rem', color: '#666', fontSize: '0.8rem' }}>
-        <p>Built with NestJS + React + Claude</p>
-      </footer>
     </div>
   );
 }

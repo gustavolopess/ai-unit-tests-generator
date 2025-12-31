@@ -49,8 +49,6 @@ export const JobDashboard: React.FC<JobDashboardProps> = ({ jobId, onBack, onSwi
     const [generatingFile, setGeneratingFile] = useState<string | null>(null);
     const logsEndRef = useRef<HTMLDivElement>(null);
 
-    console.log(job?.status, isJobInFinalStatus(job))
-
     const pollJob = async () => {
         try {
             const response = await axios.get(`http://localhost:3000/jobs/${jobId}`);
@@ -65,11 +63,8 @@ export const JobDashboard: React.FC<JobDashboardProps> = ({ jobId, onBack, onSwi
         }
     };
 
-    console.log('GENERATING FILE', generatingFile);
-
     const handleGenerateTests = async (file: string) => {
         if (!job) return;
-        console.log('GENERATING FILE 3', file);
         setGeneratingFile(file);
         try {
             // If this is a child job (test generation), we want to use the PARENT job ID
@@ -96,7 +91,6 @@ export const JobDashboard: React.FC<JobDashboardProps> = ({ jobId, onBack, onSwi
         return () => {
             clearInterval(interval);
             // Reset generating file state when component unmounts or jobId changes
-            console.log('RESET GENERATING FILE');
             setGeneratingFile(null);
         };
     }, [jobId]);
