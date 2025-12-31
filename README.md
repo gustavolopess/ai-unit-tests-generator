@@ -232,3 +232,18 @@ Belongs to the **Test Generation Bounded Context**. It tracks the specific AI in
 | `coverage` | DECIMAL | The achieved coverage coverage percentage after generation. |
 | `pull_request` | JSON | Details of the PR created for this request. |
 | `error` | TEXT | Error message if generation failed. |
+
+## Serialization of Repository Jobs
+
+To ensure system stability and prevent race conditions (especially during `npm install` or Git operations), the system implements a strict **serialization mechanism per repository**.
+
+- **Requirement:** "Serialize jobs per repository."
+- **Implementation:** Database-level locking via the `repositories` table.
+
+**How it works:**
+
+1. **Lock Acquisition:** When a job requiring exclusive access (like cloning or analysis) starts, it attempts to set `lock_acquired = true` on the corresponding `GitRepo` entity in the database.
+2. **Concurrency Control:** If another job is already holding the lock for that repository, the new job will wait or fail gracefully (depending on the retry policy), ensuring that two heavy operations never run simultaneously on the same filesystem folder.
+3. **Release:** Once the critical section is done, the lock is released (`lock_acquired = false`), allowing pending jobs to proceed.
+
+This design allows the system to scale horizontally for *different* repositories while maintaining data integrity for *the same* repository.
