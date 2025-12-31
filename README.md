@@ -4,7 +4,7 @@ A full-stack application that automatically improves TypeScript test coverage in
 
 ## 📚 Documentation Links
 
-For reference about how to setup and quickstart this project, refer to these docs:
+For reference about how to setup and quickstart this project, follow these docs:
 
 - [Backend Documentation](./backend/README.md) - Setup, API, and Architecture details.
 - [Frontend Documentation](./frontend/README.md) - Dashboard setup and usage.
