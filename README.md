@@ -1,4 +1,4 @@
-# TS Coverage Improver
+# AI Unit Tests Generator
 
 A full-stack application that automatically improves TypeScript test coverage in GitHub repositories using AI.
 

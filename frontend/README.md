@@ -1,4 +1,4 @@
-# TS Coverage Improver - Frontend
+# AI Unit Tests Generator - Frontend
 
 A React application for monitoring test coverage analysis and triggering AI-powered test generation, built with Vite.
 

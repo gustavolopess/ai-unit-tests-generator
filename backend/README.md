@@ -1,4 +1,4 @@
-# GitHub Coverage Analyzer - Backend
+# AI Unit Tests Generator - Backend
 
 A DDD/CQRS NestJS application that analyzes test coverage of TypeScript GitHub repositories and generates tests using Claude CLI.
 
