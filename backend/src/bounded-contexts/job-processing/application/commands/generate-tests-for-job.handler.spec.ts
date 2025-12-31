@@ -8,6 +8,7 @@ import { CommandBus, QueryBus, EventBus } from '@nestjs/cqrs';
 import { GenerateTestsCommand } from '@/bounded-contexts/test-generation/application/commands';
 import { GetRepositoryQuery } from '@/bounded-contexts/git-repo-analysis/application/queries';
 import { SetTestGenerationDataCommand } from './set-test-generation-data.command';
+import { CompleteJobCommand } from './complete-job.command';
 import {
   TestGenerationCompletedForJobEvent,
   TestGenerationFailedForJobEvent,
@@ -133,9 +134,89 @@ describe('GenerateTestsForJobHandler', () => {
     expect(commandBus.execute).not.toHaveBeenCalledWith(
       expect.any(GenerateTestsCommand),
     );
-    // Should complete the job directly if PR not needed (PR logic depends on other flags)
-    expect(job.status).toBe(JobStatus.COMPLETED);
-    expect(jobRepository.save).toHaveBeenCalled();
+    // Should call CompleteJobCommand if no PR needed
+    expect(commandBus.execute).toHaveBeenCalledWith(
+      expect.any(CompleteJobCommand),
+    );
+  });
+
+  // 🔒 CRITICAL: Lock Release Test Cases
+  describe('Lock Release - Coverage Analysis Only (No Test Generation)', () => {
+    it('should call CompleteJobCommand to release lock when no test generation is needed', async () => {
+      // Arrange: Job with high coverage (no test generation needed)
+      const job = Job.create(repoIdStr, undefined); // No targetFilePath = no test generation
+      job.updateStatus(JobStatus.ANALYSIS_COMPLETED);
+      job.setCoverageResult({
+        totalFiles: 5,
+        averageCoverage: 90.0,
+        files: [
+          { file: 'src/file1.ts', coverage: 85.0 },
+          { file: 'src/file2.ts', coverage: 95.0 },
+        ],
+      });
+
+      jobRepository.findById.mockResolvedValue(job);
+
+      const command = new GenerateTestsForJobCommand(jobIdStr);
+
+      // Act
+      await handler.execute(command);
+
+      // Assert: CompleteJobCommand MUST be called to release the repository lock
+      expect(commandBus.execute).toHaveBeenCalledWith(
+        expect.any(CompleteJobCommand),
+      );
+
+      // Verify the CompleteJobCommand has correct jobId
+      const completeJobCall = commandBus.execute.mock.calls.find(
+        ([cmd]) => cmd instanceof CompleteJobCommand,
+      );
+      expect(completeJobCall).toBeDefined();
+      expect(completeJobCall[0].jobId).toBe(jobIdStr);
+
+      // Should NOT update status directly (CompleteJobCommand handles it)
+      expect(jobRepository.save).not.toHaveBeenCalled();
+
+      // Should NOT call GenerateTestsCommand
+      expect(commandBus.execute).not.toHaveBeenCalledWith(
+        expect.any(GenerateTestsCommand),
+      );
+    });
+
+    it('should NOT call CompleteJobCommand if PR creation is still needed', async () => {
+      // Arrange: Job that doesn't need test gen but needs PR
+      const job = Job.create(repoIdStr, 'src/target.ts');
+      job.updateStatus(JobStatus.ANALYSIS_COMPLETED);
+      job.setCoverageResult({
+        totalFiles: 1,
+        averageCoverage: 95.0,
+        files: [{ file: 'src/target.ts', coverage: 95.0 }],
+      });
+      // Already has test generation result but needs PR
+      job.setTestGenerationResult({
+        filePath: 'src/target.ts',
+        testFilePath: 'src/target.spec.ts',
+        coverage: 95.0,
+      });
+
+      // Mock needsPRCreation to return true
+      jest.spyOn(job, 'needsPRCreation').mockReturnValue(true);
+
+      jobRepository.findById.mockResolvedValue(job);
+
+      const command = new GenerateTestsForJobCommand(jobIdStr);
+
+      // Act
+      await handler.execute(command);
+
+      // Assert: Should NOT complete yet - PR creation is next step
+      expect(commandBus.execute).not.toHaveBeenCalledWith(
+        expect.any(CompleteJobCommand),
+      );
+
+      // Should NOT update status or save
+      expect(jobRepository.save).not.toHaveBeenCalled();
+    });
   });
 
   it('should handle failures', async () => {

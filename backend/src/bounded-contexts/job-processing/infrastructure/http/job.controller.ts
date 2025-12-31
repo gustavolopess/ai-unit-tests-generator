@@ -27,7 +27,7 @@ import { AppConfig } from '@/shared/config/app.config';
 
 @ApiTags('jobs')
 @Controller('jobs')
-export class CoverageController {
+export class JobController {
   constructor(
     private readonly commandBus: CommandBus,
     private readonly queryBus: QueryBus,

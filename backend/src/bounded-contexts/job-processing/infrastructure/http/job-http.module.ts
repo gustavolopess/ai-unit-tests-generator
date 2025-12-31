@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { CoverageController } from './coverage.controller';
+import { JobController } from './job.controller';
 
 import { JobProcessingModule } from '@/bounded-contexts/job-processing/job-processing.module';
 import { GitRepoAnalysisModule } from '@/bounded-contexts/git-repo-analysis/git-repo-analysis.module';
@@ -7,7 +7,7 @@ import { TestGenerationModule } from '@/bounded-contexts/test-generation/test-ge
 
 @Module({
   imports: [JobProcessingModule, GitRepoAnalysisModule, TestGenerationModule],
-  controllers: [CoverageController],
+  controllers: [JobController],
   providers: [],
 })
-export class CoverageModule {}
+export class JobHttpModule {}

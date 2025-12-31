@@ -57,7 +57,7 @@ export const AppConfig = {
     /** Directory for job log files */
     logsDir: process.env.LOGS_DIR || join(process.cwd(), 'data', 'logs'),
 
-    /** Lock timeout in milliseconds (default: 30 minutes) */
-    lockTimeoutMs: parseInt(process.env.LOCK_TIMEOUT_MS || '1800000', 10),
+    /** Lock timeout in milliseconds (default: 5 minutes) */
+    lockTimeoutMs: parseInt(process.env.LOCK_TIMEOUT_MS || '300000', 10),
   },
 } as const;

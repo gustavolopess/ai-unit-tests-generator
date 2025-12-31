@@ -10,7 +10,7 @@ import type { IJobRepository } from '@/bounded-contexts/job-processing/domain/re
 import { JOB_REPOSITORY } from '@/bounded-contexts/job-processing/domain/repositories/job.repository.interface';
 import { JobStatus } from '@/bounded-contexts/job-processing/domain/models/job-status.enum';
 import { CreatePullRequestCommand } from '@/bounded-contexts/test-generation/application/commands';
-import { AppendJobLogCommand, SetPRResultCommand } from './';
+import { AppendJobLogCommand, SetPRResultCommand, CompleteJobCommand } from './';
 import {
   PRCreatedForJobEvent,
   PRCreationFailedForJobEvent,
@@ -44,8 +44,8 @@ export class CreatePRForJobHandler implements ICommandHandler<CreatePRForJobComm
         this.logger.log(
           `Job ${jobId} does not need PR creation, completing job`,
         );
-        job.updateStatus(JobStatus.COMPLETED);
-        await this.jobRepository.save(job);
+        // Complete the job - use CompleteJobCommand to ensure lock is released
+        await this.commandBus.execute(new CompleteJobCommand(jobId));
         return;
       }
 

@@ -12,7 +12,7 @@ import { JOB_REPOSITORY } from '@/bounded-contexts/job-processing/domain/reposit
 import { JobStatus } from '@/bounded-contexts/job-processing/domain/models/job-status.enum';
 import { GenerateTestsCommand } from '@/bounded-contexts/test-generation/application/commands';
 import { GetRepositoryQuery } from '@/bounded-contexts/git-repo-analysis/application/queries';
-import { AppendJobLogCommand, SetTestGenerationDataCommand } from './';
+import { AppendJobLogCommand, SetTestGenerationDataCommand, CompleteJobCommand } from './';
 import {
   TestGenerationCompletedForJobEvent,
   TestGenerationFailedForJobEvent,
@@ -50,9 +50,8 @@ export class GenerateTestsForJobHandler implements ICommandHandler<GenerateTests
           // This will be handled by another saga step
           return;
         }
-        // Complete the job
-        job.updateStatus(JobStatus.COMPLETED);
-        await this.jobRepository.save(job);
+        // Complete the job - use CompleteJobCommand to ensure lock is released
+        await this.commandBus.execute(new CompleteJobCommand(jobId));
         return;
       }
 
