@@ -14,6 +14,7 @@ export class AITestGeneratorService implements ITestGenerator {
     const prompt = this.buildTestGenerationPrompt(targetFilePath);
     let summary = '';
     let sessionId: string | undefined;
+    let testFilePath: string | undefined;
 
     try {
       this.logger.log(`Generating tests for ${targetFilePath} in ${workingDirectory}`);
@@ -32,13 +33,26 @@ export class AITestGeneratorService implements ITestGenerator {
           // Capture session ID
           if (msg.session_id && !sessionId) {
             sessionId = msg.session_id;
-            this.logger.log(`[Session ID] ${sessionId}`);
           }
 
           // Capture text from assistant messages
           if (msg.type === 'assistant') {
             const textBlocks = msg.content.filter((block) => block.type === 'text');
             summary += textBlocks.map((block: any) => block.text).join('\n');
+
+            // Capture test file path from Write tool calls
+            const writeToolCalls = msg.content.filter((block: any) =>
+              block.type === 'tool_use' && block.name === 'Write'
+            );
+
+            // Look for test file creation (files with .test. or .spec. in the name)
+            for (const toolCall of writeToolCalls) {
+              const filePath = (toolCall as any).input?.file_path;
+
+              if (filePath && (filePath.includes('.test.') || filePath.includes('.spec.') || filePath.includes('__tests__'))) {
+                testFilePath = filePath;
+              }
+            }
           }
 
           if (onOutput) {
@@ -54,15 +68,21 @@ export class AITestGeneratorService implements ITestGenerator {
 
       this.logger.log(`Test generation completed successfully`);
       this.logger.log(`Session ID: ${sessionId}`);
+      if (testFilePath) {
+        this.logger.log(`Test file created: ${testFilePath}`);
+      }
 
       if (onOutput) {
         onOutput(`Test generation completed`);
         onOutput(`Session ID: ${sessionId}`);
+        if (testFilePath) {
+          onOutput(`Test file created: ${testFilePath}`);
+        }
       }
 
       return {
         sessionId,
-        testFilePath: undefined, // Claude doesn't return this explicitly
+        testFilePath,
         coverage: undefined, // Would need to run tests to get this
       };
     } catch (error) {

@@ -82,9 +82,15 @@ export class CreatePRForJobHandler
         }),
       );
 
+      // Refresh job to get the updated PR result
+      const updatedJob = await this.jobRepository.findById(jobId);
+      if (!updatedJob) {
+        throw new Error(`Job ${jobId} not found after setting PR result`);
+      }
+
       // Update job status
-      job.updateStatus(JobStatus.PR_CREATION_COMPLETED);
-      await this.jobRepository.save(job);
+      updatedJob.updateStatus(JobStatus.PR_CREATION_COMPLETED);
+      await this.jobRepository.save(updatedJob);
 
       this.logger.log(`PR creation completed for job ${jobId}`);
 

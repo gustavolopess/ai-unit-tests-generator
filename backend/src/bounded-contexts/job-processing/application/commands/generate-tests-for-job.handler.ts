@@ -109,9 +109,15 @@ export class GenerateTestsForJobHandler
         ),
       );
 
+      // Refresh job to get the updated test generation result
+      const updatedJob = await this.jobRepository.findById(jobId);
+      if (!updatedJob) {
+        throw new Error(`Job ${jobId} not found after setting test generation data`);
+      }
+
       // Update job status
-      job.updateStatus(JobStatus.TEST_GENERATION_COMPLETED);
-      await this.jobRepository.save(job);
+      updatedJob.updateStatus(JobStatus.TEST_GENERATION_COMPLETED);
+      await this.jobRepository.save(updatedJob);
 
       this.logger.log(`Test generation completed for job ${jobId}`);
 
